@@ -1,0 +1,56 @@
+name: cricjust_premium
+description: "A new Flutter project."
+publish_to: 'none'
+
+version: 1.0.0+1
+
+environment:
+  sdk: ^3.8.1
+
+dependencies:
+  flutter:
+    sdk: flutter
+  cupertino_icons: ^1.0.8
+  shimmer: ^3.0.0
+  http: ^0.13.6
+  intl: ^0.18.1
+  shared_preferences: ^2.2.2
+  smooth_page_indicator: ^1.1.0
+  flutter_staggered_animations: ^1.1.1
+  firebase_core: ^2.27.0
+  firebase_auth: ^4.17.8
+  cloud_firestore: ^4.16.1
+  flutter_html: ^3.0.0
+  cached_network_image: ^3.3.1
+  flutter_animate: ^4.5.0 # ✅ Add this line
+
+
+dev_dependencies:
+  flutter_test:
+    sdk: flutter
+  flutter_lints: ^5.0.0
+  flutter_launcher_icons: ^0.13.1
+  flutter_native_splash: ^2.4.6
+
+flutter:
+  uses-material-design: true
+
+  assets:
+    - lib/asset/images/app_icon.png
+    - lib/asset/images/light_theme.png
+    - lib/asset/images/dark_theme.png
+    - lib/asset/images/cricjust_logo.png
+
+flutter_launcher_icons:
+  android: true
+  ios: true
+  image_path: "lib/asset/images/app_icon.png"
+  adaptive_icon_background: "#0288D1"
+  adaptive_icon_foreground: "lib/asset/images/app_icon.png"
+
+flutter_native_splash:
+  color: "#0288D1"
+  image: lib/asset/images/light_theme.png
+  android: true
+  ios: true
+  fullscreen: true
