@@ -27,4 +27,26 @@ class AppTextStyles {
     fontWeight: FontWeight.w600,
     color: Colors.white,
   );
+
+  // ✅ Added for full_match_detail.dart
+  static const label = TextStyle(
+    fontSize: 14,
+    fontWeight: FontWeight.w500,
+    color: AppColors.textSecondary,
+  );
+
+  static const bodySmall = TextStyle(
+    fontSize: 12,
+    color: Colors.black87,
+  );
+
+  static const bodyMedium = TextStyle(
+    fontSize: 14,
+    color: Colors.black,
+  );
+
+  static const bodyLarge = TextStyle(
+    fontSize: 16,
+    fontWeight: FontWeight.bold,
+  );
 }

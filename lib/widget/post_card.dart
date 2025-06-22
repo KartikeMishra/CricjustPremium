@@ -10,11 +10,16 @@ class PostCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+    final cardColor = Theme.of(context).cardColor;
+    final textColor = Theme.of(context).textTheme.bodyLarge?.color ?? Colors.white;
+    final subTextColor = isDark ? Colors.grey[400] : Colors.grey[600];
+
     return Padding(
       padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-      child: Material(
-        borderRadius: BorderRadius.circular(16),
-        color: Colors.white,
+      child: Card(
+        color: cardColor,
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
         elevation: 3,
         child: InkWell(
           borderRadius: BorderRadius.circular(16),
@@ -29,22 +34,21 @@ class PostCard extends StatelessWidget {
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              // ✅ Cached image with fallback
               ClipRRect(
                 borderRadius: const BorderRadius.vertical(top: Radius.circular(16)),
                 child: CachedNetworkImage(
                   imageUrl: post.image,
-                  height: 220,
+                  height: 200,
                   width: double.infinity,
                   fit: BoxFit.cover,
                   placeholder: (context, url) => Container(
-                    height: 220,
-                    color: Colors.grey[300],
+                    height: 200,
+                    color: isDark ? Colors.grey[800] : Colors.grey[300],
                     child: const Center(child: CircularProgressIndicator()),
                   ),
                   errorWidget: (context, url, error) => Container(
-                    height: 220,
-                    color: Colors.grey[300],
+                    height: 200,
+                    color: isDark ? Colors.grey[800] : Colors.grey[300],
                     child: const Center(child: Icon(Icons.broken_image, size: 50)),
                   ),
                 ),
@@ -57,22 +61,23 @@ class PostCard extends StatelessWidget {
                   children: [
                     Text(
                       post.title,
-                      style: const TextStyle(
+                      style: TextStyle(
                         fontSize: 17,
                         fontWeight: FontWeight.bold,
+                        color: textColor,
                       ),
                     ),
                     const SizedBox(height: 6),
                     Text(
                       post.shortInfo,
-                      style: const TextStyle(fontSize: 14),
+                      style: TextStyle(fontSize: 14, color: textColor),
                       maxLines: 2,
                       overflow: TextOverflow.ellipsis,
                     ),
                     const SizedBox(height: 6),
                     Text(
                       "By ${post.author} • ${post.date}",
-                      style: TextStyle(fontSize: 12, color: Colors.grey[600]),
+                      style: TextStyle(fontSize: 12, color: subTextColor),
                     ),
                     const SizedBox(height: 10),
                     Wrap(
@@ -80,7 +85,9 @@ class PostCard extends StatelessWidget {
                       children: post.categories
                           .map((cat) => Chip(
                         label: Text(cat, style: const TextStyle(fontSize: 12)),
-                        backgroundColor: Colors.blue.shade50,
+                        backgroundColor: isDark
+                            ? Colors.grey.shade800
+                            : Colors.blue.shade50,
                         visualDensity: VisualDensity.compact,
                         padding: const EdgeInsets.symmetric(horizontal: 6),
                       ))

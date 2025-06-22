@@ -1,21 +1,31 @@
 import 'package:flutter/material.dart';
-import 'screen/splash_screen.dart';
-import 'theme/app_theme.dart';
+import 'package:provider/provider.dart';
+import 'Screen/home_screen.dart';
+import 'theme/theme_provider.dart';
+import 'theme/theme_manager.dart';
 
 void main() {
-  runApp(const MyApp());
+  runApp(
+    ChangeNotifierProvider(
+      create: (_) => ThemeProvider(),
+      child: const CricjustApp(),
+    ),
+  );
 }
 
-class MyApp extends StatelessWidget {
-  const MyApp({super.key});
+class CricjustApp extends StatelessWidget {
+  const CricjustApp({super.key});
 
   @override
   Widget build(BuildContext context) {
+    final themeProvider = Provider.of<ThemeProvider>(context);
     return MaterialApp(
       title: 'Cricjust',
       debugShowCheckedModeBanner: false,
       theme: AppTheme.lightTheme,
-      home: const SplashScreen(),
+      darkTheme: AppTheme.darkTheme,
+      themeMode: themeProvider.themeMode,
+      home: const HomeScreen(),
     );
   }
 }

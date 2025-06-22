@@ -1,18 +1,21 @@
-// lib/screens/home_screen.dart
-
 import 'dart:convert';
 import 'package:flutter/material.dart';
+import 'package:provider/provider.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:http/http.dart' as http;
 
-import '../screen/home_page_content.dart';
+import '../screen/add_match_screen.dart';
+import '../screen/add_team_screen.dart';
+import '../screen/add_tournament_screen.dart';
+import '../screen/add_venue_screen.dart';
 import '../screen/login_screen.dart';
 import '../screen/match_screen.dart';
 import '../screen/tournament_screen.dart';
 import '../screen/all_posts_screen.dart';
 import '../screen/profile_screen.dart';
 import '../theme/color.dart';
-import '../theme/text_styles.dart';
+import '../theme/theme_provider.dart';
+import 'home_page_content.dart';
 
 class HomeScreen extends StatefulWidget {
   const HomeScreen({Key? key}) : super(key: key);
@@ -23,8 +26,8 @@ class HomeScreen extends StatefulWidget {
 
 class _HomeScreenState extends State<HomeScreen> {
   int _selectedIndex = 0;
-  String _userName = 'Cricjust User';
-  String _userEmail = 'user@cricjust.in';
+  String _userName = '';
+  String _userEmail = '';
   String? _profilePicUrl;
   String? _apiToken;
 
@@ -50,14 +53,13 @@ class _HomeScreenState extends State<HomeScreen> {
     if (token.isNotEmpty) {
       try {
         final uri = Uri.parse(
-          'https://cricjust.in/wp-json/custom-api-for-cricket/user-info'
-              '?api_logged_in_token=$token',
+          'https://cricjust.in/wp-json/custom-api-for-cricket/user-info?api_logged_in_token=$token',
         );
         final resp = await http.get(uri);
         if (resp.statusCode == 200) {
           final jsonData = json.decode(resp.body) as Map<String, dynamic>;
           if (jsonData['status'] == 1) {
-            final data  = jsonData['data'] as Map<String, dynamic>;
+            final data = jsonData['data'] as Map<String, dynamic>;
             final extra = jsonData['extra_data'] as Map<String, dynamic>;
 
             setState(() {
@@ -75,10 +77,10 @@ class _HomeScreenState extends State<HomeScreen> {
       }
     }
 
-    // Fallback to stored prefs
+    // fallback to local storage
     setState(() {
-      _userName      = prefs.getString('userName')     ?? _userName;
-      _userEmail     = prefs.getString('userEmail')    ?? _userEmail;
+      _userName = prefs.getString('userName') ?? _userName;
+      _userEmail = prefs.getString('userEmail') ?? _userEmail;
       _profilePicUrl = prefs.getString('profilePic');
     });
   }
@@ -96,7 +98,7 @@ class _HomeScreenState extends State<HomeScreen> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: Colors.white,
+      backgroundColor: Theme.of(context).scaffoldBackgroundColor,
       appBar: AppBar(
         backgroundColor: AppColors.primary,
         elevation: 2,
@@ -110,8 +112,6 @@ class _HomeScreenState extends State<HomeScreen> {
             icon: const Icon(Icons.notifications, color: Colors.white),
             onPressed: () {},
           ),
-
-          // Always visible profile avatar
           GestureDetector(
             onTap: () async {
               final prefs = await SharedPreferences.getInstance();
@@ -164,7 +164,7 @@ class _HomeScreenState extends State<HomeScreen> {
             Expanded(
               child: ListView(
                 children: [
-                  _buildDrawerItem(Icons.play_circle_fill, 'Start Match'),
+                  _buildDrawerNavItem(Icons.play_circle_fill, 'Start Match', const AddMatchScreen()),
                   _buildDrawerItem(Icons.school, 'App Tutorial'),
                   _buildDrawerItem(Icons.help_outline, 'Solve'),
                   _buildDrawerItem(Icons.sports_cricket, 'My Matches'),
@@ -174,6 +174,23 @@ class _HomeScreenState extends State<HomeScreen> {
                   _buildDrawerItem(Icons.group, 'My Teams'),
                   _buildDrawerItem(Icons.people, 'Find People'),
                   _buildDrawerItem(Icons.bar_chart, 'My Stats'),
+                  const Divider(),
+                  _buildDrawerNavItem(Icons.location_on, 'Add Venue', const AddVenueScreen()),
+                  _buildDrawerNavItem(Icons.emoji_events_outlined, 'Add Tournament', const AddTournamentScreen()),
+                  _buildDrawerNavItem(Icons.add_circle_outline, 'Add Teams', const AddTeamScreen()),
+                  _buildDrawerNavItem(Icons.add_circle_outline, 'Add Match', const AddMatchScreen()),
+                  Consumer<ThemeProvider>(
+                    builder: (context, themeProvider, _) {
+                      return SwitchListTile(
+                        title: const Text('Dark Mode', style: TextStyle(fontSize: 16)),
+                        secondary: const Icon(Icons.dark_mode, color: AppColors.primary),
+                        value: themeProvider.themeMode == ThemeMode.dark,
+                        onChanged: (val) {
+                          themeProvider.toggleTheme(val);
+                        },
+                      );
+                    },
+                  ),
                 ],
               ),
             ),
@@ -217,11 +234,28 @@ class _HomeScreenState extends State<HomeScreen> {
     );
   }
 
-  ListTile _buildDrawerItem(IconData icon, String label) {
+  ListTile _buildDrawerNavItem(IconData icon, String label, Widget destination) {
     return ListTile(
       leading: Icon(icon, color: AppColors.primary),
       title: Text(label, style: const TextStyle(fontSize: 16)),
-      onTap: () => Navigator.pop(context),
+      onTap: () {
+        Navigator.pop(context);
+        Navigator.push(
+          context,
+          MaterialPageRoute(builder: (_) => destination),
+        );
+      },
+    );
+  }
+
+  Widget _buildDrawerItem(IconData icon, String label, {VoidCallback? onTap}) {
+    return ListTile(
+      leading: Icon(icon, color: AppColors.primary),
+      title: Text(label, style: const TextStyle(fontSize: 16)),
+      onTap: () {
+        Navigator.pop(context);
+        if (onTap != null) onTap();
+      },
     );
   }
 }

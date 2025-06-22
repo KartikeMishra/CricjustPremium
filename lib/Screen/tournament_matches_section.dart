@@ -3,7 +3,7 @@ import 'package:intl/intl.dart';
 import 'package:shimmer/shimmer.dart';
 import '../model/tournament_match_detail_model.dart';
 import '../service/tournament_service.dart';
-import '../screen/match_detail_screen.dart';
+import '../screen/full_match_detail.dart'; // Updated import
 import '../theme/color.dart';
 import '../theme/text_styles.dart';
 
@@ -47,7 +47,6 @@ class _TournamentMatchesSectionState extends State<TournamentMatchesSection> wit
 
   Future<void> _fetchMatches() async {
     setState(() => _isLoading = true);
-
     try {
       final result = await TournamentService.fetchTournamentMatches(
         widget.tournamentId,
@@ -126,7 +125,7 @@ class _TournamentMatchesSectionState extends State<TournamentMatchesSection> wit
                   fontWeight: FontWeight.bold,
                   fontSize: 16,
                   letterSpacing: 0.5,
-                  color: const Color(0xFF0D47A1), // Deep blue
+                  color: const Color(0xFF0D47A1),
                 ),
               ),
               subtitle: Column(
@@ -135,12 +134,12 @@ class _TournamentMatchesSectionState extends State<TournamentMatchesSection> wit
                   const SizedBox(height: 6),
                   Row(
                     children: [
-                      const Icon(Icons.schedule, size: 16, color: Color(0xFF90A4AE)), // Icon gray
+                      const Icon(Icons.schedule, size: 16, color: Color(0xFF90A4AE)),
                       const SizedBox(width: 6),
                       Text(
                         DateFormat('dd MMM yyyy, hh:mm a').format(dt),
                         style: AppTextStyles.caption.copyWith(
-                          color: const Color(0xFF546E7A), // Cool gray
+                          color: const Color(0xFF546E7A),
                           fontSize: 13.5,
                         ),
                       ),
@@ -151,19 +150,21 @@ class _TournamentMatchesSectionState extends State<TournamentMatchesSection> wit
                     m.matchResult,
                     style: AppTextStyles.caption.copyWith(
                       fontStyle: FontStyle.italic,
-                      color: const Color(0xFF607D8B), // Medium gray
+                      color: const Color(0xFF607D8B),
                       fontSize: 13.5,
                     ),
                   ),
                 ],
               ),
               trailing: const Icon(Icons.chevron_right, size: 20, color: Colors.grey),
-              onTap: () => Navigator.push(
-                context,
-                MaterialPageRoute(
-                  builder: (_) => MatchDetailScreen(matchId: int.parse(m.matchId)),
-                ),
-              ),
+              onTap: () {
+                Navigator.push(
+                  context,
+                  MaterialPageRoute(
+                    builder: (_) => FullMatchDetail(matchId: int.parse(m.matchId)), // ✅ Updated line
+                  ),
+                );
+              },
             ),
           ),
         );

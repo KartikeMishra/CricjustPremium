@@ -4,11 +4,11 @@ import '../model/tournament_model.dart';
 import '../model/tournament_overview_model.dart';
 import '../model/fair_play_model.dart';
 import '../model/tournament_match_detail_model.dart';
+import '../model/tournament_stats_model.dart';
 
 class TournamentService {
   static const String _base = 'https://cricjust.in/wp-json/custom-api-for-cricket';
 
-  // Fetch tournament overview with points and groups
   static Future<Map<String, dynamic>> fetchTournamentOverview(int id) async {
     final uri = Uri.parse('$_base/get-single-tournament-overview?tournament_id=$id&type=overview');
     final resp = await http.get(uri);
@@ -30,9 +30,7 @@ class TournamentService {
 
     final hasGroups = (dataMap['is_group'] as int? ?? 0) == 1;
     final groups = hasGroups
-        ? (body['groups'] as List<dynamic>?)
-        ?.map((g) => GroupModel.fromJson(g))
-        .toList() ?? []
+        ? (body['groups'] as List<dynamic>?)?.map((g) => GroupModel.fromJson(g)).toList() ?? []
         : [GroupModel(groupId: '0', groupName: 'All Teams')];
 
     return {
@@ -42,7 +40,6 @@ class TournamentService {
     };
   }
 
-  // Fetch fair play data
   static Future<List<FairPlayStanding>> fetchFairPlay(int id) async {
     final uri = Uri.parse('$_base/get-single-tournament-overview?tournament_id=$id&type=fairplay');
     final resp = await http.get(uri);
@@ -60,7 +57,6 @@ class TournamentService {
     return listJson.map((e) => FairPlayStanding.fromJson(e)).toList();
   }
 
-  // Combined overview + fair play
   static Future<Map<String, dynamic>> fetchTournamentOverviewWithFairPlay(int id) async {
     final overview = await fetchTournamentOverview(id);
     final fairPlay = await fetchFairPlay(id);
@@ -68,7 +64,38 @@ class TournamentService {
     return overview;
   }
 
-  // Fetch all tournaments
+  static Future<Map<String, dynamic>> fetchTournamentStats(int tournamentId) async {
+    final url = Uri.parse('$_base/get-single-tournament-overview?tournament_id=$tournamentId&type=stats');
+    final response = await http.get(url);
+
+    if (response.statusCode == 200) {
+      final jsonBody = jsonDecode(response.body);
+      if (jsonBody['status'] == 1) {
+        return {
+          'mostRuns': (jsonBody['get_most_runs_api'] as List?)?.map((e) => RunStats.fromJson(e)).toList() ?? [],
+          'mostWickets': (jsonBody['get_most_wickets_api'] as List?)?.map((e) => WicketStats.fromJson(e)).toList() ?? [],
+          'mostSixes': (jsonBody['get_most_sixes_api'] as List?)?.map((e) => SixStats.fromJson(e)).toList() ?? [],
+          'mostFours': (jsonBody['get_most_fours_api'] as List?)?.map((e) => FourStats.fromJson(e)).toList() ?? [],
+          'highestScores': (jsonBody['get_highest_score_api'] as List?)?.map((e) => HighestScore.fromJson(e)).toList() ?? [],
+          'mvp': (jsonBody['mvp'] as List?)?.map((e) => MVP.fromJson(e)).toList() ?? [],
+          'summary': jsonBody['get_all'] != null ? SummaryStats.fromJson(jsonBody['get_all']) : SummaryStats(
+            matches: '0',
+            runs: '0',
+            wickets: '0',
+            sixes: '0',
+            fours: '0',
+            balls: '0',
+            extras: '0',
+          ),
+        };
+      } else {
+        throw Exception("API returned status != 1");
+      }
+    } else {
+      throw Exception("Failed to connect to server");
+    }
+  }
+
   static Future<List<TournamentModel>> fetchTournaments({String? type, int? limit, int? skip}) async {
     final params = <String, String>{};
     if (type != null) params['type'] = type;
@@ -91,10 +118,9 @@ class TournamentService {
     return listJson.map((e) => TournamentModel.fromJson(e)).toList();
   }
 
-  // ✅ Fetch recent/upcoming matches using new structure
   static Future<List<TournamentMatchDetail>> fetchTournamentMatches(
       int tournamentId, {
-        String type = 'recent', // 'recent' or 'upcoming'
+        String type = 'recent',
       }) async {
     final uri = Uri.parse(
       '$_base/get-single-tournament-overview?tournament_id=$tournamentId&type=$type',

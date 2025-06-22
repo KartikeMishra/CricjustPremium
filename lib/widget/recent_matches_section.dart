@@ -2,13 +2,12 @@ import 'dart:math';
 import 'package:flutter/material.dart';
 import 'package:shimmer/shimmer.dart';
 import 'package:smooth_page_indicator/smooth_page_indicator.dart';
-import '../Screen/all_matches_screen.dart';
+
 import '../model/match_model.dart';
 import '../service/match_service.dart';
-import '../screen/match_detail_screen.dart';
+import '../screen/full_match_detail.dart';
 import '../theme/color.dart';
 import '../theme/text_styles.dart';
-import '../widget/load_more.dart';
 
 class RecentMatchesSection extends StatefulWidget {
   const RecentMatchesSection({super.key});
@@ -20,7 +19,6 @@ class RecentMatchesSection extends StatefulWidget {
 class _RecentMatchesSectionState extends State<RecentMatchesSection> {
   List<MatchModel> _matches = [];
   bool _isLoading = true;
-  bool _hasMore = false;
   final int _visibleCount = 5;
   final PageController _pageController = PageController(viewportFraction: 0.92);
   int _currentPage = 0;
@@ -43,11 +41,10 @@ class _RecentMatchesSectionState extends State<RecentMatchesSection> {
       if (!mounted) return;
       setState(() {
         _matches = matches;
-        _hasMore = matches.length > _visibleCount;
         _isLoading = false;
       });
     } catch (e) {
-      print("Error loading recent matches: $e");
+      debugPrint("Error loading recent matches: $e");
       if (!mounted) return;
       setState(() => _isLoading = false);
     }
@@ -55,132 +52,86 @@ class _RecentMatchesSectionState extends State<RecentMatchesSection> {
 
   @override
   Widget build(BuildContext context) {
-    return Container(
-      margin: const EdgeInsets.symmetric(horizontal: 0, vertical: 0),
-      padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 8),
-      decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(16),
-        boxShadow: [
-          BoxShadow(
-            color: Colors.black.withOpacity(0.05),
-            blurRadius: 10,
-            offset: const Offset(0, 4),
-          ),
-        ],
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          // Header
-          Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
-            child: Row(
-              mainAxisAlignment: MainAxisAlignment.spaceBetween,
-              children: [
-                Row(
-                  children: const [
-                    Icon(Icons.history, color: Colors.blue, size: 18),
-                    SizedBox(width: 6),
-                    Text("Recent Matches", style: AppTextStyles.sectionTitle),
-                  ],
-                ),
-                LoadMoreArrow(
-                  show: _hasMore,
-                  onTap: () {
-                    Navigator.push(
-                      context,
-                      MaterialPageRoute(
-                        builder: (_) => const AllMatchesScreen(
-                          matchType: 'recent',
-                          title: 'All Recent Matches',
-                        ),
-                      ),
-                    );
-                  },
-                ),
-              ],
-            ),
-          ),
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+    final cardColor = Theme.of(context).cardColor;
+    final shimmerBase = isDark ? Colors.grey.shade800 : Colors.grey.shade300;
+    final shimmerHighlight = isDark ? Colors.grey.shade600 : Colors.grey.shade100;
 
-          _isLoading
-              ? SizedBox(
-            height: 230,
-            child: PageView.builder(
-              controller: _pageController,
-              itemCount: _visibleCount,
-              itemBuilder: (context, index) => _buildShimmerCard(),
-            ),
-          )
-              : SizedBox(
-            height: 230,
-            child: PageView.builder(
-              controller: _pageController,
-              itemCount: min(_matches.length, _visibleCount),
-              onPageChanged: (index) => setState(() => _currentPage = index),
-              itemBuilder: (context, index) {
-                final match = _matches[index];
-                return GestureDetector(
-                  onTap: () {
-                    Navigator.push(
-                      context,
-                      MaterialPageRoute(
-                        builder: (_) => MatchDetailScreen(matchId: match.matchId),
-                      ),
-                    );
-                  },
-                  child: ConstrainedBox(
-                    constraints: const BoxConstraints(maxHeight: 210),
-                    child: Card(
-                      color: AppColors.cardBackground,
-                      margin: const EdgeInsets.symmetric(horizontal: 8, vertical: 6),
-                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-                      elevation: 3,
-                      child: Padding(
-                        padding: const EdgeInsets.all(10),
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            Text(match.matchName, style: AppTextStyles.matchTitle),
-                            const SizedBox(height: 4),
-                            Text(match.tournamentName, style: AppTextStyles.tournamentName),
-                            const SizedBox(height: 8),
-                            _buildTeamRow(match.team1Logo, match.team1Name, match.team1Runs, match.team1Wickets),
-                            const SizedBox(height: 6),
-                            _buildTeamRow(match.team2Logo, match.team2Name, match.team2Runs, match.team2Wickets),
-                            const SizedBox(height: 10),
-                            Text("Result: ${match.result}", style: AppTextStyles.result),
-                            const Spacer(),
-                          ],
-                        ),
+    if (_isLoading) return _buildShimmerLoader(shimmerBase, shimmerHighlight);
+    if (_matches.isEmpty) return const SizedBox.shrink();
+
+    return Column(
+      children: [
+        SizedBox(
+          height: 230,
+          child: PageView.builder(
+            controller: _pageController,
+            itemCount: min(_matches.length, _visibleCount),
+            onPageChanged: (index) => setState(() => _currentPage = index),
+            itemBuilder: (context, index) {
+              final match = _matches[index];
+              return GestureDetector(
+                onTap: () => Navigator.push(
+                  context,
+                  MaterialPageRoute(
+                    builder: (_) => FullMatchDetail(matchId: match.matchId),
+                  ),
+                ),
+                child: ConstrainedBox(
+                  constraints: const BoxConstraints(maxHeight: 210),
+                  child: Card(
+                    color: cardColor,
+                    margin: const EdgeInsets.symmetric(horizontal: 8, vertical: 6),
+                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                    elevation: 3,
+                    child: Padding(
+                      padding: const EdgeInsets.all(10),
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(match.matchName,
+                              style: AppTextStyles.matchTitle,
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis),
+                          const SizedBox(height: 4),
+                          Text(match.tournamentName,
+                              style: AppTextStyles.tournamentName,
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis),
+                          const SizedBox(height: 8),
+                          _buildTeamRow(match.team1Logo, match.team1Name, match.team1Runs, match.team1Wickets),
+                          const SizedBox(height: 6),
+                          _buildTeamRow(match.team2Logo, match.team2Name, match.team2Runs, match.team2Wickets),
+                          const SizedBox(height: 10),
+                          Text("Result: ${match.result}",
+                              style: AppTextStyles.result,
+                              maxLines: 2,
+                              overflow: TextOverflow.ellipsis),
+                        ],
                       ),
                     ),
                   ),
-                );
-              },
+                ),
+              );
+            },
+          ),
+        ),
+        const SizedBox(height: 10),
+        Center(
+          child: SmoothPageIndicator(
+            controller: _pageController,
+            count: min(_matches.length, _visibleCount),
+            effect: WormEffect(
+              dotHeight: 8,
+              dotWidth: 8,
+              spacing: 8,
+              activeDotColor: AppColors.primary,
+              dotColor: isDark ? Colors.grey : Colors.grey.shade400,
             ),
           ),
-
-          const SizedBox(height: 10),
-
-          if (!_isLoading)
-            Center(
-              child: SmoothPageIndicator(
-                controller: _pageController,
-                count: min(_matches.length, _visibleCount),
-                effect: const WormEffect(
-                  dotHeight: 8,
-                  dotWidth: 8,
-                  spacing: 8,
-                  activeDotColor: AppColors.primary,
-                  dotColor: Colors.grey,
-                ),
-              ),
-            ),
-
-          const SizedBox(height: 12),
-        ],
-      ),
+        ),
+        const SizedBox(height: 12),
+      ],
     );
   }
 
@@ -193,7 +144,7 @@ class _RecentMatchesSectionState extends State<RecentMatchesSection> {
           child: Text(name, style: AppTextStyles.teamName, maxLines: 1, overflow: TextOverflow.ellipsis),
         ),
         const SizedBox(width: 10),
-        Text("$runs/$wickets", style: AppTextStyles.score),
+        Text('$runs/$wickets', style: AppTextStyles.score),
       ],
     );
   }
@@ -218,26 +169,34 @@ class _RecentMatchesSectionState extends State<RecentMatchesSection> {
     );
   }
 
+  Widget _buildShimmerLoader(Color baseColor, Color highlightColor) {
+    return SizedBox(
+      height: 230,
+      child: ListView.builder(
+        scrollDirection: Axis.horizontal,
+        itemCount: 3,
+        padding: const EdgeInsets.symmetric(horizontal: 12),
+        itemBuilder: (context, index) {
+          return Shimmer.fromColors(
+            baseColor: baseColor,
+            highlightColor: highlightColor,
+            child: Container(
+              width: MediaQuery.of(context).size.width * 0.82,
+              margin: const EdgeInsets.only(right: 12),
+              decoration: BoxDecoration(
+                color: baseColor,
+                borderRadius: BorderRadius.circular(12),
+              ),
+            ),
+          );
+        },
+      ),
+    );
+  }
+
   Color _getRandomColor(String seed) {
     final hash = seed.hashCode;
     final rng = Random(hash);
     return Color.fromARGB(255, 100 + rng.nextInt(155), 100 + rng.nextInt(155), 100 + rng.nextInt(155));
-  }
-
-  Widget _buildShimmerCard() {
-    return Padding(
-      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 6),
-      child: Shimmer.fromColors(
-        baseColor: Colors.grey[300]!,
-        highlightColor: Colors.grey[100]!,
-        child: Container(
-          height: 210,
-          decoration: BoxDecoration(
-            color: Colors.grey[300],
-            borderRadius: BorderRadius.circular(12),
-          ),
-        ),
-      ),
-    );
   }
 }

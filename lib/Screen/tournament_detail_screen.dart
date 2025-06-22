@@ -1,9 +1,9 @@
 import 'package:flutter/material.dart';
 import '../theme/color.dart';
 import '../theme/text_styles.dart';
-import 'match_detail_screen.dart';
 import 'tournament_overview_screen.dart';
-import 'tournament_matches_tab.dart'; // ✅ NEW import
+import 'tournament_matches_tab.dart';
+import 'tournament_stats_screen.dart'; // ✅ Import stats screen
 
 class TournamentDetailScreen extends StatelessWidget {
   final int tournamentId;
@@ -38,38 +38,10 @@ class TournamentDetailScreen extends StatelessWidget {
         body: TabBarView(
           children: [
             TournamentOverviewScreen(tournamentId: tournamentId),
-            TournamentMatchesTab(tournamentId: tournamentId), // ✅ Updated
-            _buildStatsTab(),
+            TournamentMatchesTab(tournamentId: tournamentId),
+            TournamentStatsScreen(tournamentId: tournamentId), // ✅ FINAL STATS SCREEN
           ],
         ),
-      ),
-    );
-  }
-
-  Widget _buildStatsTab() {
-    return Padding(
-      padding: const EdgeInsets.all(16.0),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.stretch,
-        children: [
-          Text('Stats', style: AppTextStyles.sectionTitle),
-          const SizedBox(height: 20),
-          Expanded(
-            child: Center(
-              child: Column(
-                mainAxisAlignment: MainAxisAlignment.center,
-                children: [
-                  Icon(Icons.insights, size: 60, color: Colors.grey.shade300),
-                  const SizedBox(height: 12),
-                  Text(
-                    'Coming Soon',
-                    style: TextStyle(color: Colors.grey.shade400, fontSize: 20),
-                  ),
-                ],
-              ),
-            ),
-          ),
-        ],
       ),
     );
   }

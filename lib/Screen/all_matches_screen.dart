@@ -2,14 +2,14 @@ import 'dart:math';
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 import '../model/match_model.dart';
+import '../screen/full_match_detail.dart';
 import '../service/match_service.dart';
-import '../screen/match_detail_screen.dart';
 import '../theme/color.dart';
 import '../theme/text_styles.dart';
 
 class AllMatchesScreen extends StatefulWidget {
   final String matchType; // recent, live, upcoming
-  final String? title; // Optional: Only show AppBar if provided
+  final String? title;
 
   const AllMatchesScreen({
     super.key,
@@ -68,7 +68,6 @@ class _AllMatchesScreenState extends State<AllMatchesScreen> {
         _isLoadingMore = false;
       });
     } catch (e) {
-      print("Error fetching ${widget.matchType} matches: $e");
       setState(() {
         _isLoading = false;
         _isLoadingMore = false;
@@ -78,6 +77,10 @@ class _AllMatchesScreenState extends State<AllMatchesScreen> {
 
   @override
   Widget build(BuildContext context) {
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+    final cardColor = Theme.of(context).cardColor ?? (isDark ? Colors.grey[900]! : Colors.white);
+    final subTextColor = isDark ? Colors.grey[300]! : Colors.black54;
+
     final matchList = _isLoading
         ? const Center(child: CircularProgressIndicator())
         : _matches.isEmpty
@@ -99,15 +102,16 @@ class _AllMatchesScreenState extends State<AllMatchesScreen> {
             Navigator.push(
               context,
               MaterialPageRoute(
-                builder: (_) => MatchDetailScreen(matchId: match.matchId),
+                builder: (_) => FullMatchDetail(matchId: match.matchId),
               ),
             );
           },
-          child: Card(
+          child: Container(
             margin: const EdgeInsets.symmetric(vertical: 8),
-            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-            color: AppColors.cardBackground,
-            elevation: 2,
+            decoration: BoxDecoration(
+              color: cardColor,
+              borderRadius: BorderRadius.circular(12),
+            ),
             child: Padding(
               padding: const EdgeInsets.all(12),
               child: Column(
@@ -124,23 +128,11 @@ class _AllMatchesScreenState extends State<AllMatchesScreen> {
                   const SizedBox(height: 6),
                   _buildDate(match.matchDate, match.matchTime),
                   const SizedBox(height: 6),
-                  _buildTeamRow(
-                    match.team1Logo,
-                    match.team1Name,
-                    match.team1Runs,
-                    match.team1Wickets,
-                    match.team1Overs,
-                    match.team1Balls,
-                  ),
+                  _buildTeamRow(match.team1Logo, match.team1Name, match.team1Runs,
+                      match.team1Wickets, match.team1Overs, match.team1Balls, subTextColor),
                   const SizedBox(height: 6),
-                  _buildTeamRow(
-                    match.team2Logo,
-                    match.team2Name,
-                    match.team2Runs,
-                    match.team2Wickets,
-                    match.team2Overs,
-                    match.team2Balls,
-                  ),
+                  _buildTeamRow(match.team2Logo, match.team2Name, match.team2Runs,
+                      match.team2Wickets, match.team2Overs, match.team2Balls, subTextColor),
                   if (match.toss.isNotEmpty) ...[
                     const SizedBox(height: 4),
                     Text(match.toss, style: AppTextStyles.timeLeft),
@@ -196,7 +188,7 @@ class _AllMatchesScreenState extends State<AllMatchesScreen> {
     }
   }
 
-  Widget _buildTeamRow(String logo, String name, int runs, int wickets, int overs, int balls) {
+  Widget _buildTeamRow(String logo, String name, int runs, int wickets, int overs, int balls, Color subTextColor) {
     return Row(
       children: [
         _teamLogo(logo, name),
@@ -205,7 +197,7 @@ class _AllMatchesScreenState extends State<AllMatchesScreen> {
           child: Text(name, style: AppTextStyles.teamName),
         ),
         Text("$runs/$wickets", style: AppTextStyles.score),
-        Text(" (${overs}.${balls})", style: const TextStyle(color: Colors.black54, fontSize: 12)),
+        Text(" (${overs}.${balls})", style: TextStyle(color: subTextColor, fontSize: 12)),
       ],
     );
   }

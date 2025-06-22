@@ -24,7 +24,8 @@ class _AllPostsScreenState extends State<AllPostsScreen>
   @override
   void initState() {
     super.initState();
-    _controller = AnimationController(vsync: this, duration: const Duration(milliseconds: 500));
+    _controller = AnimationController(
+        vsync: this, duration: const Duration(milliseconds: 500));
     _animation = CurvedAnimation(parent: _controller, curve: Curves.easeIn);
     _fetchPosts();
   }
@@ -73,8 +74,11 @@ class _AllPostsScreenState extends State<AllPostsScreen>
 
   @override
   Widget build(BuildContext context) {
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+    final bgColor = Theme.of(context).scaffoldBackgroundColor;
+
     return Scaffold(
-      backgroundColor: Colors.grey[100],
+      backgroundColor: bgColor,
       body: _isLoading
           ? const Center(child: CircularProgressIndicator())
           : RefreshIndicator(
@@ -85,16 +89,24 @@ class _AllPostsScreenState extends State<AllPostsScreen>
             if (_categories.length > 1)
               SingleChildScrollView(
                 scrollDirection: Axis.horizontal,
-                padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+                padding: const EdgeInsets.symmetric(
+                    horizontal: 12, vertical: 10),
                 child: Row(
                   children: _categories.map((cat) {
                     final selected = _selectedCategory == cat;
                     return Padding(
                       padding: const EdgeInsets.only(right: 8),
                       child: ChoiceChip(
-                        label: Text(cat),
+                        label: Text(
+                          cat,
+                          style: TextStyle(
+                            color: selected ? Colors.white : null,
+                          ),
+                        ),
                         selected: selected,
                         selectedColor: Colors.blue,
+                        backgroundColor:
+                        isDark ? Colors.grey[800] : Colors.grey[200],
                         onSelected: (_) => _filterPosts(cat),
                       ),
                     );
@@ -116,7 +128,8 @@ class _AllPostsScreenState extends State<AllPostsScreen>
                         Navigator.push(
                           context,
                           MaterialPageRoute(
-                            builder: (_) => PostDetailScreen(postId: post.id),
+                            builder: (_) =>
+                                PostDetailScreen(postId: post.id),
                           ),
                         );
                       },

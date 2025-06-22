@@ -1,5 +1,3 @@
-// lib/widgets/tournament_section.dart
-
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 import 'package:smooth_page_indicator/smooth_page_indicator.dart';
@@ -7,7 +5,6 @@ import '../Screen/tournament_overview_screen.dart';
 import '../model/tournament_model.dart';
 import '../service/tournament_service.dart';
 import '../theme/color.dart';
-import '../theme/text_styles.dart';
 
 class TournamentSection extends StatefulWidget {
   final String type;
@@ -58,20 +55,21 @@ class _TournamentSectionState extends State<TournamentSection> {
 
   @override
   Widget build(BuildContext context) {
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+    final cardColor = Theme.of(context).cardColor;
+    final textColor = isDark ? Colors.white : Colors.black87;
+    final subTextColor = isDark ? Colors.grey[400] : Colors.grey[700];
+    final shadowColor = isDark ? Colors.transparent : Colors.grey.withOpacity(0.08);
+
     if (_isLoading) {
-      return const Center(child: CircularProgressIndicator());
+      return _buildShimmerLoader(cardColor);
     }
     if (_tournaments.isEmpty) {
       return const SizedBox.shrink();
     }
 
     return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        const Padding(
-          padding: EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-          child: Text("Tournaments", style: AppTextStyles.sectionTitle),
-        ),
         SizedBox(
           height: 200,
           child: PageView.builder(
@@ -94,11 +92,11 @@ class _TournamentSectionState extends State<TournamentSection> {
                   margin: const EdgeInsets.only(right: 12),
                   padding: const EdgeInsets.all(12),
                   decoration: BoxDecoration(
-                    color: AppColors.cardBackground,
+                    color: cardColor,
                     borderRadius: BorderRadius.circular(12),
                     boxShadow: [
                       BoxShadow(
-                        color: Colors.grey.withOpacity(0.1),
+                        color: shadowColor,
                         blurRadius: 6,
                         offset: const Offset(0, 4),
                       ),
@@ -125,7 +123,11 @@ class _TournamentSectionState extends State<TournamentSection> {
                           children: [
                             Text(
                               tournament.tournamentName,
-                              style: AppTextStyles.matchTitle,
+                              style: TextStyle(
+                                color: textColor,
+                                fontWeight: FontWeight.w600,
+                                fontSize: 16,
+                              ),
                               maxLines: 1,
                               overflow: TextOverflow.ellipsis,
                             ),
@@ -134,7 +136,10 @@ class _TournamentSectionState extends State<TournamentSection> {
                                 padding: const EdgeInsets.only(top: 2),
                                 child: Text(
                                   tournament.tournamentDesc,
-                                  style: AppTextStyles.tournamentName,
+                                  style: TextStyle(
+                                    color: subTextColor,
+                                    fontSize: 13,
+                                  ),
                                   maxLines: 2,
                                   overflow: TextOverflow.ellipsis,
                                 ),
@@ -142,7 +147,10 @@ class _TournamentSectionState extends State<TournamentSection> {
                             const SizedBox(height: 4),
                             Text(
                               "Start: ${_formatDate(tournament.startDate)} • Teams: ${tournament.teams}",
-                              style: AppTextStyles.venue,
+                              style: TextStyle(
+                                color: subTextColor,
+                                fontSize: 12,
+                              ),
                             ),
                           ],
                         ),
@@ -159,16 +167,38 @@ class _TournamentSectionState extends State<TournamentSection> {
           child: SmoothPageIndicator(
             controller: _pageController,
             count: _tournaments.length,
-            effect: const WormEffect(
+            effect: WormEffect(
               dotHeight: 8,
               dotWidth: 8,
               spacing: 8,
-              activeDotColor: AppColors.primary,
-              dotColor: Colors.grey,
+              activeDotColor: isDark ? Colors.blueAccent : AppColors.primary,
+              dotColor: isDark ? Colors.grey : Colors.grey.shade400,
             ),
           ),
         ),
+        const SizedBox(height: 12),
       ],
+    );
+  }
+
+  Widget _buildShimmerLoader(Color baseColor) {
+    return SizedBox(
+      height: 200,
+      child: ListView.builder(
+        scrollDirection: Axis.horizontal,
+        itemCount: 3,
+        padding: const EdgeInsets.symmetric(horizontal: 12),
+        itemBuilder: (context, index) {
+          return Container(
+            width: MediaQuery.of(context).size.width * 0.85,
+            margin: const EdgeInsets.only(right: 12),
+            decoration: BoxDecoration(
+              color: baseColor,
+              borderRadius: BorderRadius.circular(12),
+            ),
+          );
+        },
+      ),
     );
   }
 

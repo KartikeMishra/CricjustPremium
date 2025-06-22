@@ -10,9 +10,12 @@ class FairPlayTableWidget extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+
     return Padding(
       padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
       child: Card(
+        color: isDark ? Colors.grey[900] : Colors.white,
         elevation: 3,
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
         child: Column(
@@ -21,9 +24,9 @@ class FairPlayTableWidget extends StatelessWidget {
             // blue header
             Container(
               padding: const EdgeInsets.all(12),
-              decoration: BoxDecoration(
+              decoration: const BoxDecoration(
                 color: AppColors.primary,
-                borderRadius: const BorderRadius.vertical(top: Radius.circular(12)),
+                borderRadius: BorderRadius.vertical(top: Radius.circular(12)),
               ),
               child: const Text(
                 'Fair-Play Standings',
@@ -35,20 +38,20 @@ class FairPlayTableWidget extends StatelessWidget {
             Padding(
               padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
               child: Row(
-                children: const [
-                  Expanded(flex: 4, child: Text('Team', style: TextStyle(fontWeight: FontWeight.bold))),
-                  Expanded(child: Text('FP', textAlign: TextAlign.center, style: TextStyle(fontWeight: FontWeight.bold))),
-                  Expanded(child: Text('M', textAlign: TextAlign.center, style: TextStyle(fontWeight: FontWeight.bold))),
+                children: [
+                  Expanded(flex: 4, child: Text('Team', style: TextStyle(fontWeight: FontWeight.bold, color: isDark ? Colors.white70 : Colors.black))),
+                  Expanded(child: Text('FP', textAlign: TextAlign.center, style: TextStyle(fontWeight: FontWeight.bold, color: isDark ? Colors.white70 : Colors.black))),
+                  Expanded(child: Text('M', textAlign: TextAlign.center, style: TextStyle(fontWeight: FontWeight.bold, color: isDark ? Colors.white70 : Colors.black))),
                 ],
               ),
             ),
-            const Divider(height: 1),
+            Divider(height: 1, color: isDark ? Colors.grey[700] : null),
 
             // rows
             ...fairPlayTeams.map((f) {
               final idx = fairPlayTeams.indexOf(f);
               return Container(
-                color: idx.isEven ? Colors.white : Colors.grey.shade50,
+                color: idx.isEven ? (isDark ? Colors.grey[900] : Colors.white) : (isDark ? Colors.grey[850] : Colors.grey.shade50),
                 padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
                 child: Row(
                   children: [
@@ -63,12 +66,12 @@ class FairPlayTableWidget extends StatelessWidget {
                                 : const Icon(Icons.shield, size: 32),
                           ),
                           const SizedBox(width: 8),
-                          Expanded(child: Text(f.teamName, overflow: TextOverflow.ellipsis)),
+                          Expanded(child: Text(f.teamName, overflow: TextOverflow.ellipsis, style: TextStyle(color: isDark ? Colors.white : Colors.black))),
                         ],
                       ),
                     ),
-                    Expanded(child: Text(f.fairPlayPoints.toStringAsFixed(1), textAlign: TextAlign.center)),
-                    Expanded(child: Text('${f.totalMatches}', textAlign: TextAlign.center)),
+                    Expanded(child: Text(f.fairPlayPoints.toStringAsFixed(1), textAlign: TextAlign.center, style: TextStyle(color: isDark ? Colors.white : Colors.black))),
+                    Expanded(child: Text('${f.totalMatches}', textAlign: TextAlign.center, style: TextStyle(color: isDark ? Colors.white : Colors.black))),
                   ],
                 ),
               );

@@ -7,24 +7,30 @@ class MatchScreen extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+    final bgColor = Theme.of(context).scaffoldBackgroundColor;
+    final appBarColor = Theme.of(context).appBarTheme.backgroundColor ?? (isDark ? Colors.black : Colors.white);
+    final tabTextColor = isDark ? Colors.white : AppColors.textPrimary;
+    final unselectedColor = isDark ? Colors.grey[400]! : AppColors.textSecondary;
+
     return DefaultTabController(
       length: 3,
       child: Scaffold(
-        backgroundColor: Colors.grey[100],
+        backgroundColor: bgColor,
         appBar: PreferredSize(
           preferredSize: const Size.fromHeight(50),
           child: AppBar(
             elevation: 1,
-            backgroundColor: Colors.white,
+            backgroundColor: appBarColor,
             centerTitle: true,
             automaticallyImplyLeading: false,
-            bottom: const TabBar(
+            bottom: TabBar(
               indicatorColor: AppColors.primary,
               indicatorWeight: 3,
-              labelColor: AppColors.textPrimary,
-              unselectedLabelColor: AppColors.textSecondary,
-              labelStyle: TextStyle(fontWeight: FontWeight.w600),
-              tabs: [
+              labelColor: tabTextColor,
+              unselectedLabelColor: unselectedColor,
+              labelStyle: const TextStyle(fontWeight: FontWeight.w600),
+              tabs: const [
                 Tab(text: 'Live'),
                 Tab(text: 'Upcoming'),
                 Tab(text: 'Recent'),
@@ -33,7 +39,7 @@ class MatchScreen extends StatelessWidget {
           ),
         ),
         body: const Padding(
-          padding: EdgeInsets.only(top: 8), // Minimal spacing below tab bar
+          padding: EdgeInsets.only(top: 8),
           child: TabBarView(
             children: [
               AllMatchesScreen(matchType: 'live'),

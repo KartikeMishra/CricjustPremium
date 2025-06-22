@@ -83,6 +83,9 @@ class _AllTournamentsScreenState extends State<AllTournamentsScreen> {
 
   @override
   Widget build(BuildContext context) {
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+    final cardColor = Theme.of(context).cardColor;
+
     return _isLoading
         ? const Center(child: CircularProgressIndicator())
         : _tournaments.isEmpty
@@ -114,7 +117,7 @@ class _AllTournamentsScreenState extends State<AllTournamentsScreen> {
           child: Card(
             margin: const EdgeInsets.symmetric(vertical: 8),
             shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-            color: AppColors.cardBackground,
+            color: cardColor,
             elevation: 2,
             child: Padding(
               padding: const EdgeInsets.all(12),

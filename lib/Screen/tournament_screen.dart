@@ -1,5 +1,3 @@
-// lib/screens/tournament_screen.dart
-
 import 'package:flutter/material.dart';
 import '../theme/color.dart';
 import 'all_tournaments_screen.dart';
@@ -9,22 +7,23 @@ class TournamentScreen extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+
     return DefaultTabController(
       length: 3,
       child: Scaffold(
-        backgroundColor: Colors.white,
+        backgroundColor: isDark ? Colors.black : Colors.grey[100],
         appBar: PreferredSize(
           preferredSize: const Size.fromHeight(56),
           child: AppBar(
-            backgroundColor: AppColors.primary,
-            elevation: 2,
             automaticallyImplyLeading: false,
-            toolbarHeight: 0, // remove empty title bar
+            backgroundColor: isDark ? Colors.grey[900] : Colors.white,
+            elevation: 0.5,
             bottom: TabBar(
-              indicatorColor: Colors.white,
+              indicatorColor: AppColors.primary,
               indicatorWeight: 3,
-              labelColor: Colors.white,
-              unselectedLabelColor: Colors.white70,
+              labelColor: AppColors.primary,
+              unselectedLabelColor: Colors.grey,
               labelStyle: const TextStyle(
                 fontSize: 16,
                 fontWeight: FontWeight.w600,

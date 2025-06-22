@@ -4,11 +4,13 @@ import '../theme/color.dart';
 class LoadMoreArrow extends StatefulWidget {
   final VoidCallback onTap;
   final bool show;
+  final Color iconColor; // ✅ New parameter
 
   const LoadMoreArrow({
     super.key,
     required this.onTap,
     this.show = false,
+    this.iconColor = AppColors.primary, // ✅ Default to theme primary
   });
 
   @override
@@ -50,17 +52,17 @@ class _LoadMoreArrowState extends State<LoadMoreArrow> with SingleTickerProvider
       onTap: widget.onTap,
       child: Row(
         children: [
-          const Text(
+          Text(
             "Load More",
             style: TextStyle(
-              color: AppColors.primary,
+              color: widget.iconColor,
               fontWeight: FontWeight.bold,
             ),
           ),
           const SizedBox(width: 4),
           SlideTransition(
             position: _offsetAnimation,
-            child: const Icon(Icons.arrow_forward_ios, size: 16, color: AppColors.primary),
+            child: Icon(Icons.arrow_forward_ios, size: 16, color: widget.iconColor),
           ),
         ],
       ),

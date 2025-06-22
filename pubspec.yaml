@@ -12,7 +12,7 @@ dependencies:
     sdk: flutter
   cupertino_icons: ^1.0.8
   shimmer: ^3.0.0
-  http: ^0.13.6
+  http: ^1.4.0
   intl: ^0.18.1
   shared_preferences: ^2.2.2
   smooth_page_indicator: ^1.1.0
@@ -22,8 +22,12 @@ dependencies:
   cloud_firestore: ^4.16.1
   flutter_html: ^3.0.0
   cached_network_image: ^3.3.1
-  flutter_animate: ^4.5.0 # ✅ Add this line
-
+  flutter_animate: ^4.5.0
+  flip_card: ^0.7.0
+  share_plus: ^7.0.2
+  fl_chart: ^0.66.2
+  image_picker: ^1.0.4  # or the latest version
+  provider: ^6.1.1
 
 dev_dependencies:
   flutter_test:
@@ -40,6 +44,7 @@ flutter:
     - lib/asset/images/light_theme.png
     - lib/asset/images/dark_theme.png
     - lib/asset/images/cricjust_logo.png
+    - lib/asset/images/Random_Image.png
 
 flutter_launcher_icons:
   android: true

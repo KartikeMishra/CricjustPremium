@@ -14,35 +14,33 @@ class TournamentMatchesTab extends StatefulWidget {
 class _TournamentMatchesTabState extends State<TournamentMatchesTab> {
   String _selectedType = 'recent';
 
+  void _updateMatchType(String type) {
+    if (_selectedType != type) {
+      setState(() => _selectedType = type);
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+    final selectedColor = AppColors.primary;
+    final unselectedBg = isDark ? Colors.grey[850] : Colors.grey[300];
+    final unselectedText = isDark ? Colors.white70 : Colors.black87;
+
     return Column(
       children: [
-        Padding(
-          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+        Container(
+          margin: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+          decoration: BoxDecoration(
+            borderRadius: BorderRadius.circular(12),
+            color: isDark ? Colors.grey[900] : Colors.grey[200],
+          ),
+          padding: const EdgeInsets.all(4),
           child: Row(
             children: [
-              Expanded(
-                child: ElevatedButton(
-                  style: ElevatedButton.styleFrom(
-                    backgroundColor: _selectedType == 'recent' ? AppColors.primary : Colors.grey[300],
-                    foregroundColor: _selectedType == 'recent' ? Colors.white : Colors.black,
-                  ),
-                  onPressed: () => setState(() => _selectedType = 'recent'),
-                  child: const Text('Recent'),
-                ),
-              ),
-              const SizedBox(width: 10),
-              Expanded(
-                child: ElevatedButton(
-                  style: ElevatedButton.styleFrom(
-                    backgroundColor: _selectedType == 'upcoming' ? AppColors.primary : Colors.grey[300],
-                    foregroundColor: _selectedType == 'upcoming' ? Colors.white : Colors.black,
-                  ),
-                  onPressed: () => setState(() => _selectedType = 'upcoming'),
-                  child: const Text('Upcoming'),
-                ),
-              ),
+              _buildTabButton("Recent", 'recent', selectedColor, unselectedBg!, unselectedText!),
+              const SizedBox(width: 8),
+              _buildTabButton("Upcoming", 'upcoming', selectedColor, unselectedBg, unselectedText),
             ],
           ),
         ),
@@ -53,6 +51,25 @@ class _TournamentMatchesTabState extends State<TournamentMatchesTab> {
           ),
         ),
       ],
+    );
+  }
+
+  Widget _buildTabButton(String label, String type, Color selectedColor, Color unselectedBg, Color unselectedText) {
+    final isSelected = _selectedType == type;
+    return Expanded(
+      child: ElevatedButton(
+        onPressed: () => _updateMatchType(type),
+        style: ElevatedButton.styleFrom(
+          backgroundColor: isSelected ? selectedColor : unselectedBg,
+          foregroundColor: isSelected ? Colors.white : unselectedText,
+          padding: const EdgeInsets.symmetric(vertical: 12),
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(8),
+          ),
+          elevation: isSelected ? 1 : 0,
+        ),
+        child: Text(label),
+      ),
     );
   }
 }
