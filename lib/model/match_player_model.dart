@@ -25,7 +25,9 @@ class PlayerPublicInfo {
     final info = json['player_info'] as Map<String, dynamic>;
     // parse id robustly
     final rawId = info['id'];
-    final id = rawId is num ? rawId.toInt() : int.tryParse(rawId.toString()) ?? 0;
+    final id = rawId is num
+        ? rawId.toInt()
+        : int.tryParse(rawId.toString()) ?? 0;
 
     return PlayerPublicInfo(
       id: id,
@@ -34,15 +36,21 @@ class PlayerPublicInfo {
       playerType: info['player_type'] as String? ?? '',
       batterType: info['batter_type'] as String?,
       bowlerType: info['bowler_type'] as String?,
-      teams: (info['teams'] as List<dynamic>?)
-          ?.map((t) => (t as Map<String, dynamic>)['team_name'] as String? ?? '')
-          .where((t) => t.isNotEmpty)
-          .toList() ??
+      teams:
+          (info['teams'] as List<dynamic>?)
+              ?.map(
+                (t) =>
+                    (t as Map<String, dynamic>)['team_name'] as String? ?? '',
+              )
+              .where((t) => t.isNotEmpty)
+              .toList() ??
           [],
       battingCareer: BattingCareer.fromJson(
-          (info['batting_career'] as Map<String, dynamic>?) ?? {}),
+        (info['batting_career'] as Map<String, dynamic>?) ?? {},
+      ),
       bowlingCareer: BowlingCareer.fromJson(
-          (info['bowling_career'] as Map<String, dynamic>?) ?? {}),
+        (info['bowling_career'] as Map<String, dynamic>?) ?? {},
+      ),
     );
   }
 }
@@ -73,7 +81,8 @@ class BattingCareer {
   });
 
   factory BattingCareer.fromJson(Map<String, dynamic> json) {
-    int parseInt(dynamic v) => v is num ? v.toInt() : int.tryParse(v.toString()) ?? 0;
+    int parseInt(dynamic v) =>
+        v is num ? v.toInt() : int.tryParse(v.toString()) ?? 0;
 
     return BattingCareer(
       matches: parseInt(json['total_match']),
@@ -108,7 +117,8 @@ class BowlingCareer {
   });
 
   factory BowlingCareer.fromJson(Map<String, dynamic> json) {
-    int parseInt(dynamic v) => v is num ? v.toInt() : int.tryParse(v.toString()) ?? 0;
+    int parseInt(dynamic v) =>
+        v is num ? v.toInt() : int.tryParse(v.toString()) ?? 0;
 
     return BowlingCareer(
       matches: parseInt(json['total_match']),

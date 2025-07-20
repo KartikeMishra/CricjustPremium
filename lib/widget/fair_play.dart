@@ -6,7 +6,7 @@ import '../theme/color.dart';
 
 class FairPlayTableWidget extends StatelessWidget {
   final List<FairPlayStanding> fairPlayTeams;
-  const FairPlayTableWidget({Key? key, required this.fairPlayTeams}) : super(key: key);
+  const FairPlayTableWidget({super.key, required this.fairPlayTeams});
 
   @override
   Widget build(BuildContext context) {
@@ -30,7 +30,11 @@ class FairPlayTableWidget extends StatelessWidget {
               ),
               child: const Text(
                 'Fair-Play Standings',
-                style: TextStyle(color: Colors.white, fontSize: 16, fontWeight: FontWeight.bold),
+                style: TextStyle(
+                  color: Colors.white,
+                  fontSize: 16,
+                  fontWeight: FontWeight.bold,
+                ),
               ),
             ),
 
@@ -39,9 +43,36 @@ class FairPlayTableWidget extends StatelessWidget {
               padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
               child: Row(
                 children: [
-                  Expanded(flex: 4, child: Text('Team', style: TextStyle(fontWeight: FontWeight.bold, color: isDark ? Colors.white70 : Colors.black))),
-                  Expanded(child: Text('FP', textAlign: TextAlign.center, style: TextStyle(fontWeight: FontWeight.bold, color: isDark ? Colors.white70 : Colors.black))),
-                  Expanded(child: Text('M', textAlign: TextAlign.center, style: TextStyle(fontWeight: FontWeight.bold, color: isDark ? Colors.white70 : Colors.black))),
+                  Expanded(
+                    flex: 4,
+                    child: Text(
+                      'Team',
+                      style: TextStyle(
+                        fontWeight: FontWeight.bold,
+                        color: isDark ? Colors.white70 : Colors.black,
+                      ),
+                    ),
+                  ),
+                  Expanded(
+                    child: Text(
+                      'FP',
+                      textAlign: TextAlign.center,
+                      style: TextStyle(
+                        fontWeight: FontWeight.bold,
+                        color: isDark ? Colors.white70 : Colors.black,
+                      ),
+                    ),
+                  ),
+                  Expanded(
+                    child: Text(
+                      'M',
+                      textAlign: TextAlign.center,
+                      style: TextStyle(
+                        fontWeight: FontWeight.bold,
+                        color: isDark ? Colors.white70 : Colors.black,
+                      ),
+                    ),
+                  ),
                 ],
               ),
             ),
@@ -51,8 +82,13 @@ class FairPlayTableWidget extends StatelessWidget {
             ...fairPlayTeams.map((f) {
               final idx = fairPlayTeams.indexOf(f);
               return Container(
-                color: idx.isEven ? (isDark ? Colors.grey[900] : Colors.white) : (isDark ? Colors.grey[850] : Colors.grey.shade50),
-                padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+                color: idx.isEven
+                    ? (isDark ? Colors.grey[900] : Colors.white)
+                    : (isDark ? Colors.grey[850] : Colors.grey.shade50),
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 12,
+                  vertical: 10,
+                ),
                 child: Row(
                   children: [
                     Expanded(
@@ -61,21 +97,51 @@ class FairPlayTableWidget extends StatelessWidget {
                         children: [
                           ClipOval(
                             child: f.teamLogo.isNotEmpty
-                                ? Image.network(f.teamLogo, width: 32, height: 32, fit: BoxFit.cover,
-                                errorBuilder: (_,__,___) => const Icon(Icons.shield, size: 32))
+                                ? Image.network(
+                                    f.teamLogo,
+                                    width: 32,
+                                    height: 32,
+                                    fit: BoxFit.cover,
+                                    errorBuilder: (_, __, ___) =>
+                                        const Icon(Icons.shield, size: 32),
+                                  )
                                 : const Icon(Icons.shield, size: 32),
                           ),
                           const SizedBox(width: 8),
-                          Expanded(child: Text(f.teamName, overflow: TextOverflow.ellipsis, style: TextStyle(color: isDark ? Colors.white : Colors.black))),
+                          Expanded(
+                            child: Text(
+                              f.teamName,
+                              overflow: TextOverflow.ellipsis,
+                              style: TextStyle(
+                                color: isDark ? Colors.white : Colors.black,
+                              ),
+                            ),
+                          ),
                         ],
                       ),
                     ),
-                    Expanded(child: Text(f.fairPlayPoints.toStringAsFixed(1), textAlign: TextAlign.center, style: TextStyle(color: isDark ? Colors.white : Colors.black))),
-                    Expanded(child: Text('${f.totalMatches}', textAlign: TextAlign.center, style: TextStyle(color: isDark ? Colors.white : Colors.black))),
+                    Expanded(
+                      child: Text(
+                        f.fairPlayPoints.toStringAsFixed(1),
+                        textAlign: TextAlign.center,
+                        style: TextStyle(
+                          color: isDark ? Colors.white : Colors.black,
+                        ),
+                      ),
+                    ),
+                    Expanded(
+                      child: Text(
+                        '${f.totalMatches}',
+                        textAlign: TextAlign.center,
+                        style: TextStyle(
+                          color: isDark ? Colors.white : Colors.black,
+                        ),
+                      ),
+                    ),
                   ],
                 ),
               );
-            }).toList(),
+            }),
           ],
         ),
       ),

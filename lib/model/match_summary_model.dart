@@ -1,8 +1,7 @@
 // File: lib/model/match_detail_model.dart
 
-import 'dart:convert';
-
 /// Combined model for match summary and scorecard
+library;
 
 // ------------------------ SUMMARY ------------------------
 class MatchSummary {

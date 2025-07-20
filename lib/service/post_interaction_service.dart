@@ -1,7 +1,9 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
 
 class PostInteractionService {
-  static final _collection = FirebaseFirestore.instance.collection('posts_interactions');
+  static final _collection = FirebaseFirestore.instance.collection(
+    'posts_interactions',
+  );
 
   // Toggle like/unlike
   static Future<void> toggleLike(String postId, String userId) async {

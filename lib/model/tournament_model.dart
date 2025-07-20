@@ -6,6 +6,10 @@ class TournamentModel {
   final String startDate;
   final String created;
   final int teams;
+  final bool isGroup;
+  final bool isOpen;
+  final dynamic winner;
+  final int? userId; // ✅ Already declared
 
   TournamentModel({
     required this.tournamentId,
@@ -14,18 +18,28 @@ class TournamentModel {
     required this.tournamentDesc,
     required this.startDate,
     required this.created,
-    required this.teams,
+    this.teams = 0,
+    this.isGroup = false,
+    this.isOpen = false,
+    this.winner,
+    this.userId, // ✅ ADD THIS LINE
   });
 
   factory TournamentModel.fromJson(Map<String, dynamic> json) {
     return TournamentModel(
-      tournamentId: json['tournament_id'] ?? 0,
+      tournamentId: int.tryParse(json['tournament_id']?.toString() ?? '') ?? 0,
       tournamentName: json['tournament_name'] ?? '',
       tournamentLogo: json['tournament_logo'] ?? '',
       tournamentDesc: json['tournament_desc'] ?? '',
       startDate: json['start_date'] ?? '',
       created: json['created'] ?? '',
-      teams: int.tryParse(json['teams'].toString()) ?? 0,
+      teams: int.tryParse(json['teams']?.toString() ?? '') ?? 0,
+      isGroup: json['is_group'].toString() == '1',
+      isOpen: json['is_open'].toString() == '1',
+      winner: json['winner'],
+      userId: json['user_id'] != null
+          ? int.tryParse(json['user_id'].toString())
+          : null,
     );
   }
 }

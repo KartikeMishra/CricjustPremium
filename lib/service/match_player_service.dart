@@ -7,7 +7,7 @@ class MatchPlayerService {
   static Future<PlayerPublicInfo> fetchPlayerInfo(int playerId) async {
     final url = Uri.parse(
       'https://cricjust.in/wp-json/custom-api-for-cricket/get-player-public-info'
-          '?player_id=$playerId',
+      '?player_id=$playerId',
     );
     final response = await http.get(url);
     if (response.statusCode != 200) {

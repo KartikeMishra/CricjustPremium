@@ -10,10 +10,10 @@ class PointsTableWidget extends StatelessWidget {
   final List<TeamStanding> teams;
 
   const PointsTableWidget({
-    Key? key,
+    super.key,
     required this.group,
     required this.teams,
-  }) : super(key: key);
+  });
 
   @override
   Widget build(BuildContext context) {
@@ -30,7 +30,9 @@ class PointsTableWidget extends StatelessWidget {
           Card(
             color: isDark ? Colors.grey[900] : Colors.white,
             elevation: 4,
-            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+            shape: RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(12),
+            ),
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.stretch,
               children: [
@@ -39,8 +41,9 @@ class PointsTableWidget extends StatelessWidget {
                   padding: const EdgeInsets.all(12),
                   decoration: const BoxDecoration(
                     color: AppColors.primary,
-                    borderRadius:
-                    BorderRadius.vertical(top: Radius.circular(12)),
+                    borderRadius: BorderRadius.vertical(
+                      top: Radius.circular(12),
+                    ),
                   ),
                   child: Text(
                     group.groupName,
@@ -59,7 +62,7 @@ class PointsTableWidget extends StatelessWidget {
                     constraints: BoxConstraints(minWidth: width),
                     child: Table(
                       defaultVerticalAlignment:
-                      TableCellVerticalAlignment.middle,
+                          TableCellVerticalAlignment.middle,
                       columnWidths: const {
                         0: FlexColumnWidth(3),
                         1: FlexColumnWidth(1),
@@ -78,8 +81,11 @@ class PointsTableWidget extends StatelessWidget {
                       children: [
                         // Header row
                         TableRow(
-                          decoration:
-                          BoxDecoration(color: isDark ? Colors.grey[800] : Colors.grey.shade100),
+                          decoration: BoxDecoration(
+                            color: isDark
+                                ? Colors.grey[800]
+                                : Colors.grey.shade100,
+                          ),
                           children: [
                             _headerCell('Team', isDark),
                             _headerCell('M', isDark),
@@ -97,24 +103,31 @@ class PointsTableWidget extends StatelessWidget {
                             decoration: BoxDecoration(
                               color: i.isEven
                                   ? (isDark ? Colors.grey[900] : Colors.white)
-                                  : (isDark ? Colors.grey[850] : Colors.grey.shade50),
+                                  : (isDark
+                                        ? Colors.grey[850]
+                                        : Colors.grey.shade50),
                             ),
                             children: [
                               Padding(
                                 padding: const EdgeInsets.symmetric(
-                                    vertical: 12, horizontal: 4),
+                                  vertical: 12,
+                                  horizontal: 4,
+                                ),
                                 child: Row(
                                   children: [
                                     ClipOval(
                                       child: sorted[i].teamLogo.isNotEmpty
                                           ? Image.network(
-                                        sorted[i].teamLogo,
-                                        width: 32,
-                                        height: 32,
-                                        fit: BoxFit.cover,
-                                        errorBuilder:
-                                            (_, __, ___) => const Icon(Icons.person, size: 32),
-                                      )
+                                              sorted[i].teamLogo,
+                                              width: 32,
+                                              height: 32,
+                                              fit: BoxFit.cover,
+                                              errorBuilder: (_, __, ___) =>
+                                                  const Icon(
+                                                    Icons.person,
+                                                    size: 32,
+                                                  ),
+                                            )
                                           : const Icon(Icons.person, size: 32),
                                     ),
                                     const SizedBox(width: 8),
@@ -123,7 +136,12 @@ class PointsTableWidget extends StatelessWidget {
                                         sorted[i].teamName,
                                         overflow: TextOverflow.visible,
                                         softWrap: true,
-                                        style: TextStyle(fontSize: 14, color: isDark ? Colors.white : Colors.black),
+                                        style: TextStyle(
+                                          fontSize: 14,
+                                          color: isDark
+                                              ? Colors.white
+                                              : Colors.black,
+                                        ),
                                       ),
                                     ),
                                   ],
@@ -135,18 +153,31 @@ class PointsTableWidget extends StatelessWidget {
                               ),
                               _dataCell('${sorted[i].wins}', isDark),
                               _dataCell('${sorted[i].losses}', isDark),
-                              _dataCell('${(sorted[i] as dynamic).ties}', isDark),
-                              _dataCell('${(sorted[i] as dynamic).draws}', isDark),
+                              _dataCell(
+                                '${(sorted[i] as dynamic).ties}',
+                                isDark,
+                              ),
+                              _dataCell(
+                                '${(sorted[i] as dynamic).draws}',
+                                isDark,
+                              ),
                               _dataCell('${sorted[i].points}', isDark),
                               _dataCell(sorted[i].netRR, isDark),
                               Center(
                                 child: IconButton(
-                                  icon: Icon(Icons.arrow_forward_ios, size: 16, color: isDark ? Colors.white70 : Colors.black54),
+                                  icon: Icon(
+                                    Icons.arrow_forward_ios,
+                                    size: 16,
+                                    color: isDark
+                                        ? Colors.white70
+                                        : Colors.black54,
+                                  ),
                                   onPressed: () {
                                     Navigator.push(
                                       context,
                                       MaterialPageRoute(
-                                        builder: (_) => TeamMatchesScreen(team: sorted[i]),
+                                        builder: (_) =>
+                                            TeamMatchesScreen(team: sorted[i]),
                                       ),
                                     );
                                   },
@@ -172,7 +203,11 @@ class PointsTableWidget extends StatelessWidget {
       child: Center(
         child: Text(
           label,
-          style: TextStyle(fontWeight: FontWeight.bold, fontSize: 14, color: isDark ? Colors.white70 : Colors.black),
+          style: TextStyle(
+            fontWeight: FontWeight.bold,
+            fontSize: 14,
+            color: isDark ? Colors.white70 : Colors.black,
+          ),
         ),
       ),
     );
@@ -184,7 +219,10 @@ class PointsTableWidget extends StatelessWidget {
       child: Center(
         child: Text(
           value,
-          style: TextStyle(fontSize: 14, color: isDark ? Colors.white : Colors.black87),
+          style: TextStyle(
+            fontSize: 14,
+            color: isDark ? Colors.white : Colors.black87,
+          ),
         ),
       ),
     );

@@ -6,34 +6,34 @@ class OverStat {
 
   factory OverStat.fromJson(Map<String, dynamic> json) {
     return OverStat(
-      overNumber: json['over_number'],
-      totalRuns: json['total_runs'],
+      overNumber: (json['over_number'] as num?)?.toInt() ?? 0,
+      totalRuns: (json['total_runs'] as num?)?.toInt() ?? 0,
     );
   }
 }
 
 class RunTypeStat {
-  final int extras;
   final int ones;
   final int twos;
   final int fours;
-  final int? sixes;
+  final int sixes;
+  final int extras;
 
   RunTypeStat({
-    required this.extras,
     required this.ones,
     required this.twos,
     required this.fours,
-    this.sixes,
+    required this.sixes,
+    required this.extras,
   });
 
   factory RunTypeStat.fromJson(Map<String, dynamic> json) {
     return RunTypeStat(
-      extras: json['extras'],
-      ones: json['one'],
-      twos: json['twos'],
-      fours: json['fours'],
-      sixes: json['sixes'] ?? 0,
+      ones: (json['one'] as num?)?.toInt() ?? 0,
+      twos: (json['twos'] as num?)?.toInt() ?? 0,
+      fours: (json['fours'] as num?)?.toInt() ?? 0,
+      sixes: (json['sixes'] as num?)?.toInt() ?? 0,
+      extras: (json['extras'] as num?)?.toInt() ?? 0,
     );
   }
 }
@@ -46,8 +46,8 @@ class WicketType {
 
   factory WicketType.fromJson(Map<String, dynamic> json) {
     return WicketType(
-      wicketType: json['wicket_type'],
-      totalWickets: json['total_wickets'],
+      wicketType: json['wicket_type'] as String? ?? '',
+      totalWickets: (json['total_wickets'] as num?)?.toInt() ?? 0,
     );
   }
 }
@@ -72,36 +72,33 @@ class MatchStats {
   });
 
   factory MatchStats.fromJson(Map<String, dynamic> json) {
-    final stats = json['stats'];
+    final stats = (json['stats'] as Map<String, dynamic>?) ?? {};
+    final man = (stats['manhattan'] as Map<String, dynamic>?) ?? {};
+    final worms = (stats['worms'] as Map<String, dynamic>?) ?? {};
+    final runs = (stats['runs_types'] as Map<String, dynamic>?) ?? {};
+    final wicks = (stats['wicket_types'] as List<dynamic>?) ?? [];
 
-    if (stats == null||stats.isEmpty) {
-      return MatchStats(
-        manhattanTeam1: [],
-        manhattanTeam2: [],
-        wormTeam1: [],
-        wormTeam2: [],
-        runTypesTeam1: RunTypeStat(extras: 0, ones: 0, twos: 0, fours: 0),
-        runTypesTeam2: RunTypeStat(extras: 0, ones: 0, twos: 0, fours: 0),
-        wicketTypes: [],
-      );
-    }
     return MatchStats(
-      manhattanTeam1:stats['manhattan']['team_1']==null?[]: (stats['manhattan']['team_1'] as List)
-          .map((e) => OverStat.fromJson(e))
+      manhattanTeam1: (man['team_1'] as List<dynamic>? ?? [])
+          .map((e) => OverStat.fromJson(e as Map<String, dynamic>))
           .toList(),
-      manhattanTeam2:stats['manhattan']['team_2']==null?[]: (stats['manhattan']['team_2'] as List)
-          .map((e) => OverStat.fromJson(e))
+      manhattanTeam2: (man['team_2'] as List<dynamic>? ?? [])
+          .map((e) => OverStat.fromJson(e as Map<String, dynamic>))
           .toList(),
-      wormTeam1: stats['worms']['team_1']==null?[]:  (stats['worms']['team_1'] as List)
-          .map((e) => OverStat.fromJson(e))
+      wormTeam1: (worms['team_1'] as List<dynamic>? ?? [])
+          .map((e) => OverStat.fromJson(e as Map<String, dynamic>))
           .toList(),
-      wormTeam2: stats['worms']['team_2'] ==null?[]: (stats['worms']['team_2'] as List)
-          .map((e) => OverStat.fromJson(e))
+      wormTeam2: (worms['team_2'] as List<dynamic>? ?? [])
+          .map((e) => OverStat.fromJson(e as Map<String, dynamic>))
           .toList(),
-      runTypesTeam1: RunTypeStat.fromJson(stats['runs_types']['team_1']),
-      runTypesTeam2: RunTypeStat.fromJson(stats['runs_types']['team_2']),
-      wicketTypes: stats['wicket_types'] ==null?[]: (stats['wicket_types'] as List)
-          .map((e) => WicketType.fromJson(e))
+      runTypesTeam1: runs['team_1'] != null
+          ? RunTypeStat.fromJson(runs['team_1'] as Map<String, dynamic>)
+          : RunTypeStat(ones: 0, twos: 0, fours: 0, sixes: 0, extras: 0),
+      runTypesTeam2: runs['team_2'] != null
+          ? RunTypeStat.fromJson(runs['team_2'] as Map<String, dynamic>)
+          : RunTypeStat(ones: 0, twos: 0, fours: 0, sixes: 0, extras: 0),
+      wicketTypes: wicks
+          .map((e) => WicketType.fromJson(e as Map<String, dynamic>))
           .toList(),
     );
   }

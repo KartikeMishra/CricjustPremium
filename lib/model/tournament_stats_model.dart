@@ -1,3 +1,5 @@
+// lib/model/tournament_stats_model.dart
+
 class RunStats {
   final String playerImage;
   final String displayName;
@@ -80,7 +82,7 @@ class SixStats {
       playerImage: json['player_image'] ?? '',
       displayName: json['Display_Name'] ?? '',
       teamName: json['team_name'] ?? '',
-      sixes: json['total_six'] ?? '0',
+      sixes: json['total_six']?.toString() ?? '0',
     );
   }
 }
@@ -89,11 +91,13 @@ class FourStats {
   final String playerImage;
   final String displayName;
   final String teamName;
+  final String fours; // ← new
 
   FourStats({
     required this.playerImage,
     required this.displayName,
     required this.teamName,
+    required this.fours, // ← new
   });
 
   factory FourStats.fromJson(Map<String, dynamic> json) {
@@ -101,6 +105,7 @@ class FourStats {
       playerImage: json['player_image'] ?? '',
       displayName: json['Display_Name'] ?? '',
       teamName: json['team_name'] ?? '',
+      fours: json['total_fours']?.toString() ?? '0', // ← pull from JSON
     );
   }
 }
@@ -185,19 +190,6 @@ class SummaryStats {
       fours: json['total_fours'] ?? '',
       balls: json['total_balls'] ?? '',
       extras: json['total_extras'] ?? '',
-    );
-  }
-
-  /// ✅ Add this factory to avoid null errors
-  factory SummaryStats.empty() {
-    return SummaryStats(
-      matches: '0',
-      runs: '0',
-      wickets: '0',
-      sixes: '0',
-      fours: '0',
-      balls: '0',
-      extras: '0',
     );
   }
 }

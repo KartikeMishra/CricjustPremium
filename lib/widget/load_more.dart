@@ -17,7 +17,8 @@ class LoadMoreArrow extends StatefulWidget {
   State<LoadMoreArrow> createState() => _LoadMoreArrowState();
 }
 
-class _LoadMoreArrowState extends State<LoadMoreArrow> with SingleTickerProviderStateMixin {
+class _LoadMoreArrowState extends State<LoadMoreArrow>
+    with SingleTickerProviderStateMixin {
   late final AnimationController _controller;
   late final Animation<Offset> _offsetAnimation;
 
@@ -32,10 +33,7 @@ class _LoadMoreArrowState extends State<LoadMoreArrow> with SingleTickerProvider
     _offsetAnimation = Tween<Offset>(
       begin: Offset.zero,
       end: const Offset(0.2, 0),
-    ).animate(CurvedAnimation(
-      parent: _controller,
-      curve: Curves.easeInOut,
-    ));
+    ).animate(CurvedAnimation(parent: _controller, curve: Curves.easeInOut));
   }
 
   @override
@@ -62,7 +60,11 @@ class _LoadMoreArrowState extends State<LoadMoreArrow> with SingleTickerProvider
           const SizedBox(width: 4),
           SlideTransition(
             position: _offsetAnimation,
-            child: Icon(Icons.arrow_forward_ios, size: 16, color: widget.iconColor),
+            child: Icon(
+              Icons.arrow_forward_ios,
+              size: 16,
+              color: widget.iconColor,
+            ),
           ),
         ],
       ),

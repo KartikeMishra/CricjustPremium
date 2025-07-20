@@ -27,10 +27,7 @@ class GroupModel {
   final String groupId;
   final String groupName;
 
-  GroupModel({
-    required this.groupId,
-    required this.groupName,
-  });
+  GroupModel({required this.groupId, required this.groupName});
 
   factory GroupModel.fromJson(Map<String, dynamic> json) {
     return GroupModel(

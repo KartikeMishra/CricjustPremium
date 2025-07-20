@@ -10,24 +10,42 @@ environment:
 dependencies:
   flutter:
     sdk: flutter
+
+  # UI & Animation
   cupertino_icons: ^1.0.8
   shimmer: ^3.0.0
+  flutter_animate: ^4.5.0
+  flutter_staggered_animations: ^1.1.1
+  flip_card: ^0.7.0
+  smooth_page_indicator: ^1.1.0
+
+  # Core
   http: ^1.4.0
   intl: ^0.18.1
   shared_preferences: ^2.2.2
-  smooth_page_indicator: ^1.1.0
-  flutter_staggered_animations: ^1.1.1
+  provider: ^6.1.1
+  url_launcher: ^6.1.5
+  path_provider: any
+  connectivity_plus: ^5.0.2
+
+  # Firebase
   firebase_core: ^2.27.0
   firebase_auth: ^4.17.8
   cloud_firestore: ^4.16.1
+
+  # Media & Display
   flutter_html: ^3.0.0
   cached_network_image: ^3.3.1
-  flutter_animate: ^4.5.0
-  flip_card: ^0.7.0
+  image_picker: ^1.0.4
   share_plus: ^7.0.2
   fl_chart: ^0.66.2
-  image_picker: ^1.0.4  # or the latest version
-  provider: ^6.1.1
+
+  # Storage
+  hive: any
+  hive_flutter: ^1.1.0
+
+  # UI Feedback
+  another_flushbar: ^1.10.29
 
 dev_dependencies:
   flutter_test:
@@ -35,6 +53,8 @@ dev_dependencies:
   flutter_lints: ^5.0.0
   flutter_launcher_icons: ^0.13.1
   flutter_native_splash: ^2.4.6
+  build_runner: ^2.4.6
+  hive_generator: ^2.0.1
 
 flutter:
   uses-material-design: true
@@ -45,6 +65,7 @@ flutter:
     - lib/asset/images/dark_theme.png
     - lib/asset/images/cricjust_logo.png
     - lib/asset/images/Random_Image.png
+    - lib/asset/images/Theme1.png
 
 flutter_launcher_icons:
   android: true

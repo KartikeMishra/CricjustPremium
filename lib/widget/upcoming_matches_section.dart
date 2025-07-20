@@ -1,4 +1,5 @@
 import 'dart:math';
+import 'dart:ui';
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 import 'package:smooth_page_indicator/smooth_page_indicator.dart';
@@ -11,7 +12,8 @@ import '../theme/color.dart';
 import '../theme/text_styles.dart';
 
 class UpcomingMatchesSection extends StatefulWidget {
-  const UpcomingMatchesSection({super.key});
+  final void Function(bool hasData)? onDataLoaded;
+  const UpcomingMatchesSection({super.key, this.onDataLoaded});
 
   @override
   State<UpcomingMatchesSection> createState() => _UpcomingMatchesSectionState();
@@ -38,27 +40,35 @@ class _UpcomingMatchesSectionState extends State<UpcomingMatchesSection> {
 
   Future<void> _fetchUpcomingMatches() async {
     try {
-      final matches = await MatchService.fetchMatches(type: 'upcoming', limit: 20);
+      final matches = await MatchService.fetchMatches(
+        type: 'upcoming',
+        limit: 20,
+      );
       if (!mounted) return;
       setState(() {
         _matches = matches;
         _isLoading = false;
       });
+      widget.onDataLoaded?.call(matches.isNotEmpty);
     } catch (e) {
       debugPrint("Error loading upcoming matches: $e");
       if (!mounted) return;
       setState(() => _isLoading = false);
+      widget.onDataLoaded?.call(false);
     }
   }
 
   String _getTimeLeft(String date, String time) {
     try {
-      final matchDateTime = DateFormat('yyyy-MM-dd HH:mm:ss').parse('$date $time');
+      final matchDateTime = DateFormat(
+        'yyyy-MM-dd HH:mm:ss',
+      ).parse('$date $time');
       final now = DateTime.now();
       final difference = matchDateTime.difference(now);
       if (difference.inSeconds < 0) return 'Starting Soon';
       if (difference.inDays > 0) return '${difference.inDays} day(s) left';
-      if (difference.inHours > 0) return '${difference.inHours % 24} hour(s) left';
+      if (difference.inHours > 0)
+        return '${difference.inHours % 24} hour(s) left';
       return '${difference.inMinutes % 60} minute(s) left';
     } catch (_) {
       return '';
@@ -68,9 +78,10 @@ class _UpcomingMatchesSectionState extends State<UpcomingMatchesSection> {
   @override
   Widget build(BuildContext context) {
     final isDark = Theme.of(context).brightness == Brightness.dark;
-    final cardColor = Theme.of(context).cardColor;
     final shimmerBase = isDark ? Colors.grey.shade800 : Colors.grey.shade300;
-    final shimmerHighlight = isDark ? Colors.grey.shade600 : Colors.grey.shade100;
+    final shimmerHighlight = isDark
+        ? Colors.grey.shade600
+        : Colors.grey.shade100;
 
     if (_isLoading) return _buildShimmerLoader(shimmerBase, shimmerHighlight);
     if (_matches.isEmpty) return const SizedBox.shrink();
@@ -78,7 +89,7 @@ class _UpcomingMatchesSectionState extends State<UpcomingMatchesSection> {
     return Column(
       children: [
         SizedBox(
-          height: 230,
+          height: 240,
           child: PageView.builder(
             controller: _pageController,
             itemCount: min(_matches.length, _visibleCount),
@@ -92,35 +103,80 @@ class _UpcomingMatchesSectionState extends State<UpcomingMatchesSection> {
                     builder: (_) => FullMatchDetail(matchId: match.matchId),
                   ),
                 ),
-                child: ConstrainedBox(
-                  constraints: const BoxConstraints(maxHeight: 210),
-                  child: Card(
-                    color: cardColor,
-                    margin: const EdgeInsets.symmetric(horizontal: 8, vertical: 6),
-                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-                    elevation: 3,
-                    child: Padding(
-                      padding: const EdgeInsets.all(10),
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Text(match.matchName,
-                              style: AppTextStyles.matchTitle,
+                child: AnimatedContainer(
+                  duration: const Duration(milliseconds: 350),
+                  margin: const EdgeInsets.symmetric(
+                    horizontal: 10,
+                    vertical: 10,
+                  ),
+                  decoration: BoxDecoration(
+                    borderRadius: BorderRadius.circular(20),
+                    gradient: isDark
+                        ? null
+                        : const LinearGradient(
+                            colors: [Color(0xFFE3F2FD), Colors.white],
+                            begin: Alignment.topLeft,
+                            end: Alignment.bottomRight,
+                          ),
+                    color: isDark ? const Color(0xFF2A2A2A) : null,
+                    boxShadow: isDark
+                        ? []
+                        : [
+                            BoxShadow(
+                              color: Colors.blue.withOpacity(0.1),
+                              blurRadius: 12,
+                              offset: const Offset(0, 6),
+                            ),
+                          ],
+                  ),
+
+                  child: ClipRRect(
+                    borderRadius: BorderRadius.circular(18),
+                    child: BackdropFilter(
+                      filter: ImageFilter.blur(sigmaX: 2, sigmaY: 2),
+                      child: Padding(
+                        padding: const EdgeInsets.all(16),
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text(
+                              match.matchName,
+                              style: AppTextStyles.matchTitle.copyWith(
+                                fontWeight: FontWeight.bold,
+                                fontSize: 16,
+                                color: isDark ? Colors.white : Colors.black87,
+                              ),
                               maxLines: 1,
-                              overflow: TextOverflow.ellipsis),
-                          const SizedBox(height: 4),
-                          Text(match.tournamentName,
+                              overflow: TextOverflow.ellipsis,
+                            ),
+                            const SizedBox(height: 4),
+                            Text(
+                              match.tournamentName,
                               style: AppTextStyles.tournamentName,
                               maxLines: 1,
-                              overflow: TextOverflow.ellipsis),
-                          const SizedBox(height: 8),
-                          _buildTeamRow(match.team1Logo, match.team1Name),
-                          const SizedBox(height: 6),
-                          _buildTeamRow(match.team2Logo, match.team2Name),
-                          const SizedBox(height: 10),
-                          Text("Starts: ${_getTimeLeft(match.matchDate, match.matchTime)}",
-                              style: AppTextStyles.timeLeft),
-                        ],
+                              overflow: TextOverflow.ellipsis,
+                            ),
+                            const SizedBox(height: 10),
+                            _buildTeamRow(match.team1Logo, match.team1Name),
+                            const SizedBox(height: 8),
+                            _buildTeamRow(match.team2Logo, match.team2Name),
+                            const Spacer(),
+                            Row(
+                              children: [
+                                const Icon(
+                                  Icons.access_time,
+                                  size: 14,
+                                  color: Colors.grey,
+                                ),
+                                const SizedBox(width: 6),
+                                Text(
+                                  "Starts: ${_getTimeLeft(match.matchDate, match.matchTime)}",
+                                  style: AppTextStyles.timeLeft,
+                                ),
+                              ],
+                            ),
+                          ],
+                        ),
                       ),
                     ),
                   ),
@@ -154,7 +210,12 @@ class _UpcomingMatchesSectionState extends State<UpcomingMatchesSection> {
         _teamLogo(logo, name),
         const SizedBox(width: 10),
         Expanded(
-          child: Text(name, style: AppTextStyles.teamName, maxLines: 1, overflow: TextOverflow.ellipsis),
+          child: Text(
+            name,
+            style: AppTextStyles.teamName,
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
+          ),
         ),
       ],
     );
@@ -164,25 +225,37 @@ class _UpcomingMatchesSectionState extends State<UpcomingMatchesSection> {
     if (url.isNotEmpty) {
       return CircleAvatar(
         radius: 16,
-        backgroundColor: Colors.grey.shade200,
+        backgroundColor: Colors.white,
         backgroundImage: NetworkImage(url),
       );
     }
-    final initials = name.split(' ').where((e) => e.isNotEmpty).map((e) => e[0]).join().toUpperCase();
+    final initials = name
+        .split(' ')
+        .where((e) => e.isNotEmpty)
+        .map((e) => e[0])
+        .join()
+        .toUpperCase();
     final bgColor = _getRandomColor(name);
     return CircleAvatar(
       radius: 16,
       backgroundColor: bgColor,
       child: Text(
         initials.length > 4 ? initials.substring(0, 4) : initials,
-        style: const TextStyle(color: Colors.white, fontSize: 12, fontWeight: FontWeight.bold),
+        style: const TextStyle(
+          color: Colors.white,
+          fontSize: 12,
+          fontWeight: FontWeight.bold,
+          shadows: [
+            Shadow(color: Colors.black26, offset: Offset(0, 1), blurRadius: 1),
+          ],
+        ),
       ),
     );
   }
 
   Widget _buildShimmerLoader(Color baseColor, Color highlightColor) {
     return SizedBox(
-      height: 230,
+      height: 240,
       child: ListView.builder(
         scrollDirection: Axis.horizontal,
         itemCount: 3,
@@ -196,7 +269,7 @@ class _UpcomingMatchesSectionState extends State<UpcomingMatchesSection> {
               margin: const EdgeInsets.only(right: 12),
               decoration: BoxDecoration(
                 color: baseColor,
-                borderRadius: BorderRadius.circular(12),
+                borderRadius: BorderRadius.circular(18),
               ),
             ),
           );
@@ -208,6 +281,11 @@ class _UpcomingMatchesSectionState extends State<UpcomingMatchesSection> {
   Color _getRandomColor(String seed) {
     final hash = seed.hashCode;
     final rng = Random(hash);
-    return Color.fromARGB(255, 100 + rng.nextInt(155), 100 + rng.nextInt(155), 100 + rng.nextInt(155));
+    return Color.fromARGB(
+      255,
+      100 + rng.nextInt(155),
+      100 + rng.nextInt(155),
+      100 + rng.nextInt(155),
+    );
   }
 }

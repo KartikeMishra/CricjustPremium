@@ -145,18 +145,12 @@ class YetToBat {
   final int userId;
   final String name;
 
-  YetToBat({
-    required this.userId,
-    required this.name,
-  });
+  YetToBat({required this.userId, required this.name});
 
   int get playerId => userId;
 
   factory YetToBat.fromJson(Map<String, dynamic> json) {
-    return YetToBat(
-      userId: json['user_id'],
-      name: json['name'],
-    );
+    return YetToBat(userId: json['user_id'], name: json['name']);
   }
 }
 

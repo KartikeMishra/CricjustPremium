@@ -4,7 +4,6 @@ import 'package:intl/intl.dart';
 import 'package:smooth_page_indicator/smooth_page_indicator.dart';
 import 'package:shimmer/shimmer.dart';
 
-import '../Screen/all_matches_screen.dart';
 import '../model/match_model.dart';
 import '../service/match_service.dart';
 import '../screen/full_match_detail.dart';
@@ -51,7 +50,8 @@ class _LiveMatchesSectionState extends State<LiveMatchesSection> {
   @override
   Widget build(BuildContext context) {
     final cardColor = Theme.of(context).cardColor;
-    final textColor = Theme.of(context).textTheme.bodyLarge?.color ?? Colors.black;
+    final textColor =
+        Theme.of(context).textTheme.bodyLarge?.color ?? Colors.black;
 
     if (_isLoading) return _buildShimmerLoader(cardColor);
     if (_matches.isEmpty) return const SizedBox.shrink();
@@ -77,8 +77,13 @@ class _LiveMatchesSectionState extends State<LiveMatchesSection> {
                 },
                 child: Card(
                   color: cardColor,
-                  margin: const EdgeInsets.symmetric(horizontal: 8, vertical: 6),
-                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                  margin: const EdgeInsets.symmetric(
+                    horizontal: 8,
+                    vertical: 6,
+                  ),
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(12),
+                  ),
                   elevation: 3,
                   child: Padding(
                     padding: const EdgeInsets.all(12),
@@ -87,19 +92,51 @@ class _LiveMatchesSectionState extends State<LiveMatchesSection> {
                       children: [
                         _buildMatchHeader(match, textColor),
                         const SizedBox(height: 4),
-                        Text(match.tournamentName,
-                            style: TextStyle(color: textColor.withOpacity(0.85), fontSize: 13)),
+                        Text(
+                          match.tournamentName,
+                          style: TextStyle(
+                            color: textColor.withOpacity(0.85),
+                            fontSize: 13,
+                          ),
+                        ),
                         const SizedBox(height: 6),
-                        Text("Date: ${_formatDate(match.matchDate, match.matchTime)}",
-                            style: TextStyle(color: textColor, fontSize: 13)),
+                        Text(
+                          "Date: ${_formatDate(match.matchDate, match.matchTime)}",
+                          style: TextStyle(color: textColor, fontSize: 13),
+                        ),
                         const SizedBox(height: 6),
-                        _buildTeamRow(match.team1Logo, match.team1Name, match.team1Runs, match.team1Wickets, match.team1Overs, match.team1Balls, textColor),
+                        _buildTeamRow(
+                          match.team1Logo,
+                          match.team1Name,
+                          match.team1Runs,
+                          match.team1Wickets,
+                          match.team1Overs,
+                          match.team1Balls,
+                          textColor,
+                        ),
                         const SizedBox(height: 6),
-                        _buildTeamRow(match.team2Logo, match.team2Name, match.team2Runs, match.team2Wickets, match.team2Overs, match.team2Balls, textColor),
+                        _buildTeamRow(
+                          match.team2Logo,
+                          match.team2Name,
+                          match.team2Runs,
+                          match.team2Wickets,
+                          match.team2Overs,
+                          match.team2Balls,
+                          textColor,
+                        ),
                         const SizedBox(height: 6),
                         if (match.toss.isNotEmpty)
-                          Text(match.toss, style: TextStyle(color: Colors.orangeAccent, fontSize: 13)),
-                        Text(match.result, style: TextStyle(color: textColor.withOpacity(0.9))),
+                          Text(
+                            match.toss,
+                            style: TextStyle(
+                              color: Colors.orangeAccent,
+                              fontSize: 13,
+                            ),
+                          ),
+                        Text(
+                          match.result,
+                          style: TextStyle(color: textColor.withOpacity(0.9)),
+                        ),
                         const Spacer(),
                       ],
                     ),
@@ -134,7 +171,11 @@ class _LiveMatchesSectionState extends State<LiveMatchesSection> {
         Expanded(
           child: Text(
             match.matchName,
-            style: TextStyle(color: textColor, fontSize: 15, fontWeight: FontWeight.w600),
+            style: TextStyle(
+              color: textColor,
+              fontSize: 15,
+              fontWeight: FontWeight.w600,
+            ),
             maxLines: 1,
             overflow: TextOverflow.ellipsis,
           ),
@@ -145,20 +186,39 @@ class _LiveMatchesSectionState extends State<LiveMatchesSection> {
             color: Colors.redAccent,
             borderRadius: BorderRadius.circular(8),
           ),
-          child: const Text("LIVE", style: TextStyle(color: Colors.white, fontSize: 10)),
+          child: const Text(
+            "LIVE",
+            style: TextStyle(color: Colors.white, fontSize: 10),
+          ),
         ),
       ],
     );
   }
 
-  Widget _buildTeamRow(String logo, String name, int runs, int wickets, int overs, int balls, Color textColor) {
+  Widget _buildTeamRow(
+    String logo,
+    String name,
+    int runs,
+    int wickets,
+    int overs,
+    int balls,
+    Color textColor,
+  ) {
     return Row(
       children: [
         _teamLogo(logo, name),
         const SizedBox(width: 8),
-        Expanded(child: Text(name, style: TextStyle(color: textColor))),
-        Text("$runs/$wickets", style: TextStyle(color: textColor, fontWeight: FontWeight.w600)),
-        Text(" ($overs.$balls)", style: TextStyle(color: textColor.withOpacity(0.7), fontSize: 12)),
+        Expanded(
+          child: Text(name, style: TextStyle(color: textColor)),
+        ),
+        Text(
+          "$runs/$wickets",
+          style: TextStyle(color: textColor, fontWeight: FontWeight.w600),
+        ),
+        Text(
+          " ($overs.$balls)",
+          style: TextStyle(color: textColor.withOpacity(0.7), fontSize: 12),
+        ),
       ],
     );
   }
@@ -171,14 +231,23 @@ class _LiveMatchesSectionState extends State<LiveMatchesSection> {
         backgroundImage: NetworkImage(url),
       );
     }
-    final initials = name.split(' ').where((e) => e.isNotEmpty).map((e) => e[0]).join().toUpperCase();
+    final initials = name
+        .split(' ')
+        .where((e) => e.isNotEmpty)
+        .map((e) => e[0])
+        .join()
+        .toUpperCase();
     final bgColor = _getRandomColor(name);
     return CircleAvatar(
       radius: 14,
       backgroundColor: bgColor,
       child: Text(
         initials.length > 4 ? initials.substring(0, 4) : initials,
-        style: const TextStyle(color: Colors.white, fontSize: 10, fontWeight: FontWeight.bold),
+        style: const TextStyle(
+          color: Colors.white,
+          fontSize: 10,
+          fontWeight: FontWeight.bold,
+        ),
       ),
     );
   }
@@ -210,7 +279,9 @@ class _LiveMatchesSectionState extends State<LiveMatchesSection> {
 
   String _formatDate(String date, String time) {
     try {
-      final matchDateTime = DateFormat('yyyy-MM-dd HH:mm:ss').parse('$date $time');
+      final matchDateTime = DateFormat(
+        'yyyy-MM-dd HH:mm:ss',
+      ).parse('$date $time');
       return DateFormat('dd MMM yyyy, hh:mm a').format(matchDateTime);
     } catch (_) {
       return "$date $time";
@@ -220,6 +291,11 @@ class _LiveMatchesSectionState extends State<LiveMatchesSection> {
   Color _getRandomColor(String seed) {
     final hash = seed.hashCode;
     final rng = Random(hash);
-    return Color.fromARGB(255, 100 + rng.nextInt(155), 100 + rng.nextInt(155), 100 + rng.nextInt(155));
+    return Color.fromARGB(
+      255,
+      100 + rng.nextInt(155),
+      100 + rng.nextInt(155),
+      100 + rng.nextInt(155),
+    );
   }
 }

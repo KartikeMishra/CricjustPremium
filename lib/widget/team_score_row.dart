@@ -27,7 +27,7 @@ class TeamScoreRow extends StatelessWidget {
         if (runs != null && wickets != null) ...[
           const SizedBox(width: 10),
           Text('$runs/$wickets', style: AppTextStyles.score),
-        ]
+        ],
       ],
     );
   }
@@ -40,13 +40,22 @@ class TeamScoreRow extends StatelessWidget {
         backgroundImage: NetworkImage(logo),
       );
     }
-    final initials = teamName.split(' ').where((e) => e.isNotEmpty).map((e) => e[0]).join().toUpperCase();
+    final initials = teamName
+        .split(' ')
+        .where((e) => e.isNotEmpty)
+        .map((e) => e[0])
+        .join()
+        .toUpperCase();
     return CircleAvatar(
       radius: 14,
       backgroundColor: logoBg ?? Colors.blueGrey,
       child: Text(
         initials.length > 4 ? initials.substring(0, 4) : initials,
-        style: const TextStyle(color: Colors.white, fontSize: 10, fontWeight: FontWeight.bold),
+        style: const TextStyle(
+          color: Colors.white,
+          fontSize: 10,
+          fontWeight: FontWeight.bold,
+        ),
       ),
     );
   }

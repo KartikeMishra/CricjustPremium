@@ -28,8 +28,12 @@ class CommentaryItem {
     return CommentaryItem(
       overNumber: topLevelOver ?? inferredOver,
       commentryPerBall: json['commentry_per_ball'],
-      overInfo: json['over_info'] != null ? OverInfo.fromJson(json['over_info']) : null,
-      tillOver: json['till_over'] != null ? TillOver.fromJson(json['till_over']) : null,
+      overInfo: json['over_info'] != null
+          ? OverInfo.fromJson(json['over_info'])
+          : null,
+      tillOver: json['till_over'] != null
+          ? TillOver.fromJson(json['till_over'])
+          : null,
     );
   }
 }
@@ -72,7 +76,9 @@ class TillOver {
       totalRuns: json['total_runs'],
       totalWickets: json['total_wickets'],
       bowler: json['bowler'] != null ? Bowler.fromJson(json['bowler']) : null,
-      batters: json['batters'] != null ? Batters.fromJson(json['batters']) : null,
+      batters: json['batters'] != null
+          ? Batters.fromJson(json['batters'])
+          : null,
     );
   }
 }
@@ -107,15 +113,16 @@ class Batters {
   final Batter? striker;
   final Batter? nonStriker;
 
-  Batters({
-    required this.striker,
-    required this.nonStriker,
-  });
+  Batters({required this.striker, required this.nonStriker});
 
   factory Batters.fromJson(Map<String, dynamic> json) {
     return Batters(
-      striker: json['striker_batter'] != null ? Batter.fromJson(json['striker_batter']) : null,
-      nonStriker: json['non_striker_batter'] != null ? Batter.fromJson(json['non_striker_batter']) : null,
+      striker: json['striker_batter'] != null
+          ? Batter.fromJson(json['striker_batter'])
+          : null,
+      nonStriker: json['non_striker_batter'] != null
+          ? Batter.fromJson(json['non_striker_batter'])
+          : null,
     );
   }
 }

@@ -21,13 +21,14 @@ class FairPlayStanding {
 
   factory FairPlayStanding.fromJson(Map<String, dynamic> json) {
     return FairPlayStanding(
-      teamId         : json['team_id'] as String? ?? '',
-      teamName       : json['team_name'] as String? ?? '',
-      teamLogo       : json['team_logo'] as String? ?? '',
-      groupId        : json['group_id'] as String? ?? '',
-      tournamentId   : json['tournament_id'] as String? ?? '',
-      fairPlayPoints : double.tryParse(json['fairplay']?.toString() ?? '') ?? 0.0,
-      totalMatches   : int.tryParse(json['total_matches']?.toString() ?? '') ?? 0,
+      teamId: json['team_id'] as String? ?? '',
+      teamName: json['team_name'] as String? ?? '',
+      teamLogo: json['team_logo'] as String? ?? '',
+      groupId: json['group_id'] as String? ?? '',
+      tournamentId: json['tournament_id'] as String? ?? '',
+      fairPlayPoints:
+          double.tryParse(json['fairplay']?.toString() ?? '') ?? 0.0,
+      totalMatches: int.tryParse(json['total_matches']?.toString() ?? '') ?? 0,
     );
   }
 }
