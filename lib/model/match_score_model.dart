@@ -10,21 +10,22 @@ class MatchScoreRequest {
   final int ballNumber;
   final int runs;
 
-  // all the optional extras
-  final String? extraRunType; // "Wide", "No Ball", etc—or "0" for none
-  final int? extraRun; // e.g. 2 for no‐ball + 2 runs
-  final int? wktkprId; // new keeper if changed mid‐match
-  final String? ballType; // e.g. "Bouncer", "Leg Break", ...
-  final String? ballLength; // e.g. "Good length", "Full Toss", ...
-  final String? ballerTheWicket; // "Over the Wicket" / "Around the Wicket"
-  final String? shot; // e.g. "Drive", "Sweep", ...
-  final String? shotArea; // e.g. "Long On", "Mid Wicket", ...
-  final int? outPlayer; // ID of player who got out
-  final int? isWicket; // 1 if wicket fell, else 0
-  final String? wicketType; // "Bowled", "Caught", "Run Out", ...
-  final int? runOutBy; // ID of the fielder who ran them out
-  final int? catchBy; // ID of the catcher
-  final String? commentry; // free‐text
+  // Optional extras
+  final String? extraRunType;     // "Wide", "No Ball", etc—or "0" for none
+  final int? extraRun;            // e.g. 2 for no‐ball + 2 runs
+  final int? wktkprId;            // new keeper if changed mid‐match
+  final String? ballType;         // e.g. "Bouncer", "Leg Break", ...
+  final String? ballLength;       // e.g. "Good length", "Full Toss", ...
+  final String? ballerTheWicket;  // "Over the Wicket" / "Around the Wicket"
+  final String? shot;             // e.g. "Drive", "Sweep", ...
+  final String? shotArea;         // e.g. "Long On", "Mid Wicket", ...
+  final int? outPlayer;           // ID of player who got out
+  final int? isWicket;            // 1 if wicket fell, else 0
+  final String? wicketType;       // numeric string: "1", "2", ...
+  final String? wicketTypeText;   // readable: "Caught", "Run Out", etc.
+  final int? runOutBy;            // ID of the fielder who ran them out
+  final int? catchBy;             // ID of the catcher
+  final String? commentry;        // free‐text commentary
 
   MatchScoreRequest({
     required this.matchId,
@@ -48,6 +49,7 @@ class MatchScoreRequest {
     this.outPlayer,
     this.isWicket,
     this.wicketType,
+    this.wicketTypeText,
     this.runOutBy,
     this.catchBy,
     this.commentry,
@@ -65,7 +67,8 @@ class MatchScoreRequest {
       'over_number': overNumber.toString(),
       'ball_number': ballNumber.toString(),
       'runs': runs.toString(),
-      // only include non-null optionals:
+
+      // Optional fields
       if (extraRunType != null) 'extra_run_type': extraRunType!,
       if (extraRun != null) 'extra_run': extraRun!.toString(),
       if (wktkprId != null) 'wktkpr_id': wktkprId!.toString(),
@@ -77,10 +80,12 @@ class MatchScoreRequest {
       if (outPlayer != null) 'out_player': outPlayer!.toString(),
       if (isWicket != null) 'is_wicket': isWicket!.toString(),
       if (wicketType != null) 'wicket_type': wicketType!,
+      if (wicketTypeText != null) 'wicket_type_text': wicketTypeText!, // ✅ NEW
       if (runOutBy != null) 'run_out_by': runOutBy!.toString(),
       if (catchBy != null) 'catch_by': catchBy!.toString(),
       if (commentry != null) 'commentry': commentry!,
     };
+
     return m;
   }
 }
