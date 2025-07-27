@@ -46,6 +46,7 @@ dependencies:
 
   # UI Feedback
   another_flushbar: ^1.10.29
+  fvm: ^3.2.1
 
 dev_dependencies:
   flutter_test:

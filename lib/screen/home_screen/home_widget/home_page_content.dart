@@ -3,15 +3,15 @@
 import 'package:flutter/material.dart';
 import 'package:shimmer/shimmer.dart';
 
-import '../screen/all_tournaments_screen.dart';
-import '../screen/all_matches_screen.dart';
-import '../screen/tournament_detail_screen.dart';
-import '../widget/live_matches_section.dart';
-import '../widget/tournament_section.dart';
-import '../widget/upcoming_matches_section.dart';
-import '../widget/recent_matches_section.dart';
-import '../widget/posts_section.dart';
-import '../theme/color.dart'; // for AppColors.primary
+import '../../all_tournaments_screen.dart';
+import '../../all_matches_screen.dart';
+import '../../tournament_detail_screen.dart';
+import '../../../widget/live_matches_section.dart';
+import '../../../widget/tournament_section.dart';
+import '../../../widget/upcoming_matches_section.dart';
+import '../../../widget/recent_matches_section.dart';
+import '../../../widget/posts_section.dart';
+import '../../../theme/color.dart'; // for AppColors.primary
 
 class HomePageContent extends StatefulWidget {
   final VoidCallback onLoadMoreTap;

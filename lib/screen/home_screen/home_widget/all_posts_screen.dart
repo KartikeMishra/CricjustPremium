@@ -1,8 +1,8 @@
 import 'package:flutter/material.dart';
-import '../model/post_model.dart';
-import '../service/post_service.dart';
-import '../widget/post_card.dart';
-import '../screen/post_detail_screen.dart';
+import '../../../model/post_model.dart';
+import '../../../service/post_service.dart';
+import '../../../widget/post_card.dart';
+import '../../post_detail_screen.dart';
 
 class AllPostsScreen extends StatefulWidget {
   const AllPostsScreen({super.key});

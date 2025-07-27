@@ -1,33 +1,36 @@
 import 'dart:convert';
 import 'dart:ui';
+
 import 'package:another_flushbar/flushbar.dart';
 import 'package:flutter/material.dart';
+import 'package:http/http.dart' as http;
 import 'package:provider/provider.dart';
 import 'package:share_plus/share_plus.dart';
 import 'package:shared_preferences/shared_preferences.dart';
-import 'package:http/http.dart' as http;
-import '../screen/login_screen.dart';
-import '../screen/match_screen.dart';
-import '../screen/tournament_screen.dart';
-import '../screen/all_posts_screen.dart';
-import '../screen/profile_screen.dart';
-import '../theme/color.dart';
-import '../theme/theme_provider.dart';
-import 'add_match_screen.dart';
-import 'get_matches.dart';
-import 'get_team_screen.dart';
-import 'get_tournament.dart';
-import 'get_venue_screen.dart';
-import 'home_page_content.dart';
-import '../screen/global_stats_screen.dart';
+
+import 'home_widget/all_posts_screen.dart';
+import '../global_stats_screen.dart';
+import '../login_screen.dart';
+import 'home_widget/match_screen.dart';
+import '../profile_screen.dart';
+import 'home_widget/tournament_screen.dart';
+import '../../theme/color.dart';
+import '../../theme/theme_provider.dart';
+import '../add_match_screen.dart';
+import '../get_matches.dart';
+import '../get_team_screen.dart';
+import '../get_tournament.dart';
+import '../get_venue_screen.dart';
+import 'home_widget/home_page_content.dart';
 
 class HomeScreen extends StatefulWidget {
   const HomeScreen({super.key});
+
   @override
-  _HomeScreenState createState() => _HomeScreenState();
+  HomeScreenState createState() => HomeScreenState();
 }
 
-class _HomeScreenState extends State<HomeScreen> {
+class HomeScreenState extends State<HomeScreen> {
   int _selectedIndex = 0;
   String _userName = '';
   String _userEmail = '';
@@ -153,7 +156,6 @@ class _HomeScreenState extends State<HomeScreen> {
   Widget build(BuildContext context) {
     return Scaffold(
       backgroundColor: Theme.of(context).scaffoldBackgroundColor,
-
       appBar: PreferredSize(
         preferredSize: const Size.fromHeight(60),
         child: Container(
@@ -180,7 +182,8 @@ class _HomeScreenState extends State<HomeScreen> {
             centerTitle: true,
             iconTheme: const IconThemeData(
               color: Colors.white,
-            ), // ✅ MOVE THIS HERE**
+            ),
+            // ✅ MOVE THIS HERE**
             title: FittedBox(
               fit: BoxFit.scaleDown,
               child: Text(
@@ -206,18 +209,20 @@ class _HomeScreenState extends State<HomeScreen> {
                 onTap: () async {
                   final prefs = await SharedPreferences.getInstance();
                   final token = prefs.getString('api_logged_in_token') ?? '';
-                  if (token.isEmpty) {
-                    Navigator.push(
-                      context,
-                      MaterialPageRoute(builder: (_) => const LoginScreen()),
-                    );
-                  } else {
-                    Navigator.push(
-                      context,
-                      MaterialPageRoute(
-                        builder: (_) => ProfileScreen(apiToken: token),
-                      ),
-                    );
+                  if(context.mounted){
+                    if (token.isEmpty) {
+                      Navigator.push(
+                        context,
+                        MaterialPageRoute(builder: (_) => const LoginScreen()),
+                      );
+                    } else {
+                      Navigator.push(
+                        context,
+                        MaterialPageRoute(
+                          builder: (_) => ProfileScreen(apiToken: token),
+                        ),
+                      );
+                    }
                   }
                 },
                 child: Padding(
@@ -241,7 +246,6 @@ class _HomeScreenState extends State<HomeScreen> {
           ),
         ),
       ),
-
       drawer: ClipRRect(
         borderRadius: const BorderRadius.only(
           topRight: Radius.circular(24),
@@ -257,14 +261,13 @@ class _HomeScreenState extends State<HomeScreen> {
                   : BoxDecoration(
                       gradient: LinearGradient(
                         colors: [
-                          AppColors.primary.withOpacity(0.85),
-                          const Color(0xFF42A5F5).withOpacity(0.85),
+                          AppColors.primary.withValues(alpha: 0.85),
+                          const Color(0xFF42A5F5).withValues(alpha: 0.85),
                         ],
                         begin: Alignment.topLeft,
                         end: Alignment.bottomRight,
                       ),
                     ),
-
               child: Column(
                 children: [
                   const SizedBox(height: 48),
@@ -329,7 +332,6 @@ class _HomeScreenState extends State<HomeScreen> {
                           _buildDrawerItem(Icons.help_outline, 'Solve'),
                           _buildDrawerItem(Icons.sports_cricket, 'My Matches'),
                           _buildDrawerItem(Icons.person, 'My Profile'),
-
                           const Padding(
                             padding: EdgeInsets.symmetric(
                               horizontal: 8,
@@ -432,12 +434,12 @@ class _HomeScreenState extends State<HomeScreen> {
                       child: AnimatedContainer(
                         duration: const Duration(milliseconds: 200),
                         decoration: BoxDecoration(
-                          color: Colors.white.withOpacity(0.1),
+                          color: Colors.white.withValues(alpha: 0.1),
                           borderRadius: BorderRadius.circular(16),
                           border: Border.all(color: Colors.white24),
                           boxShadow: [
                             BoxShadow(
-                              color: Colors.white.withOpacity(0.3),
+                              color: Colors.white.withValues(alpha: 0.3),
                               blurRadius: 12,
                               spreadRadius: 0.5,
                               offset: const Offset(0, 4),
@@ -473,7 +475,6 @@ class _HomeScreenState extends State<HomeScreen> {
           ),
         ),
       ),
-
       floatingActionButton: _selectedIndex == 0
           ? GestureDetector(
               onTap: () => Navigator.push(
@@ -486,17 +487,16 @@ class _HomeScreenState extends State<HomeScreen> {
                   // Blue when in light mode; translucent white when in dark mode
                   color: Theme.of(context).brightness == Brightness.light
                       ? AppColors.primary
-                      : Colors.white.withOpacity(0.1),
+                      : Colors.white.withValues(alpha: 0.1),
                   borderRadius: BorderRadius.circular(16),
                   border: Border.all(color: Colors.white24),
                   boxShadow: [
                     BoxShadow(
                       // subtle shadow using the same base color
-                      color:
-                          (Theme.of(context).brightness == Brightness.light
-                                  ? AppColors.primary
-                                  : Colors.white)
-                              .withOpacity(0.3),
+                      color: (Theme.of(context).brightness == Brightness.light
+                              ? AppColors.primary
+                              : Colors.white)
+                          .withValues(alpha: 0.3),
                       blurRadius: 12,
                       spreadRadius: 0.5,
                       offset: const Offset(0, 4),
@@ -527,9 +527,7 @@ class _HomeScreenState extends State<HomeScreen> {
               ),
             )
           : null,
-
       floatingActionButtonLocation: FloatingActionButtonLocation.endFloat,
-
       body: AnimatedSwitcher(
         duration: const Duration(milliseconds: 250),
         child: _pages[_selectedIndex],

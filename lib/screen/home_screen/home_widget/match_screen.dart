@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
-import '../theme/color.dart';
-import 'all_matches_screen.dart';
+import '../../../theme/color.dart';
+import '../../all_matches_screen.dart';
 
 class MatchScreen extends StatelessWidget {
   const MatchScreen({super.key});

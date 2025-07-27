@@ -2,8 +2,8 @@ import 'dart:convert';
 import 'package:flutter/material.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:http/http.dart' as http;
-import '../screen/home_screen.dart';
-import 'signup_screen.dart';
+import 'home_screen/home_screen.dart';
+import 'signup/signup_screen.dart';
 
 class LoginScreen extends StatefulWidget {
   const LoginScreen({super.key});
@@ -142,7 +142,7 @@ class _LoginScreenState extends State<LoginScreen> {
                 decoration: BoxDecoration(
                   color: isDark
                       ? const Color(0xFF1E1E1E)
-                      : Colors.white.withOpacity(0.95),
+                      : Colors.white.withValues(alpha: 0.95),
                   borderRadius: BorderRadius.circular(20),
                   boxShadow: [
                     BoxShadow(
@@ -192,10 +192,12 @@ class _LoginScreenState extends State<LoginScreen> {
                           Icons.phone,
                         ),
                         validator: (val) {
-                          if (val == null || val.trim().isEmpty)
+                          if (val == null || val.trim().isEmpty) {
                             return 'Enter phone number';
-                          if (!RegExp(r'^\d{10,15}$').hasMatch(val.trim()))
+                          }
+                          if (!RegExp(r'^\d{10,15}$').hasMatch(val.trim())) {
                             return 'Invalid number';
+                          }
                           return null;
                         },
                       ),

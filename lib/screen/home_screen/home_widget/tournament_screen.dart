@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
-import '../theme/color.dart';
-import 'all_tournaments_screen.dart';
+import '../../../theme/color.dart';
+import '../../all_tournaments_screen.dart';
 
 class TournamentScreen extends StatelessWidget {
   const TournamentScreen({super.key});

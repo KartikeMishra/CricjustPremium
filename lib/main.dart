@@ -3,7 +3,7 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:path_provider/path_provider.dart';
 import 'model/offline_score_model.dart';
-import 'screen/home_screen.dart';
+import 'screen/home_screen/home_screen.dart';
 import 'theme/theme_provider.dart';
 import 'theme/theme_manager.dart';
 import 'package:hive_flutter/hive_flutter.dart';
