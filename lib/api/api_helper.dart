@@ -1,8 +1,7 @@
-// lib/api/api_helper.dart
-
 import 'package:flutter/material.dart';
 import 'package:http/http.dart' as http;
 import 'package:shared_preferences/shared_preferences.dart';
+import '../screen/login_screen.dart'; // ✅ Make sure this path is correct
 
 class ApiHelper {
   static Future<http.Response?> safeRequest({
@@ -30,8 +29,8 @@ class ApiHelper {
               actions: [
                 TextButton(
                   onPressed: () {
-                    Navigator.of(context).pushNamedAndRemoveUntil(
-                      '/login',
+                    Navigator.of(context).pushAndRemoveUntil(
+                      MaterialPageRoute(builder: (_) => const LoginScreen()),
                           (route) => false,
                     );
                   },

@@ -7,9 +7,18 @@ import '../model/match_score_model.dart';
 import '../service/player_service.dart';
 import '../service/match_score_service.dart';
 import '../theme/color.dart';
+import '../utils/match_utils.dart';
+import '../widget/animated_score_card.dart';
+import '../widget/dialog/end_match_dialog.dart';
+import '../widget/dialog/extra_run_dialog.dart';
+import '../widget/last_six_balls_widget.dart';
+import '../widget/player_stats_card.dart';
+import '../widget/scoring_inputs.dart';
 import '../widget/shot_type_dialog.dart';
 import '../provider/match_state.dart';
-import 'package:intl/intl.dart';
+import '../widget/wicket_type_dialog.dart';
+import 'full_match_detail.dart';
+
 
 class AddScoreScreen extends StatefulWidget {
   final int matchId;
@@ -19,6 +28,7 @@ class AddScoreScreen extends StatefulWidget {
   final Map<String, dynamic>? currentScoreData;
   final List<Map<String, dynamic>>? preloadedBattingSquad;
   final List<Map<String, dynamic>>? preloadedBowlingSquad;
+  final VoidCallback? onScoreSubmitted;
 
   const AddScoreScreen({
     Key? key,
@@ -27,179 +37,17 @@ class AddScoreScreen extends StatefulWidget {
     this.currentScoreData,
     this.preloadedBattingSquad,
     this.preloadedBowlingSquad,
+    this.onScoreSubmitted, // ✅ Initialize here
   }) : super(key: key);
+
+
 
 
 
   @override
   State<AddScoreScreen> createState() => _AddScoreScreenState();
 }
-
-
-class AnimatedScoreCard extends StatelessWidget {
-  final String matchType;       // e.g., "Defender Cup Final"
-  final String teamName;        // e.g., "Knight Scorchers"
-  final bool isSecondInnings;   // true = 2nd Innings
-  final int runs;
-  final int wickets;
-  final int overs;
-  final int balls;
-
-  const AnimatedScoreCard(
-      {
-    Key? key,
-    required this.matchType,
-    required this.teamName,
-    required this.isSecondInnings,
-    required this.runs,
-    required this.wickets,
-    required this.overs,
-    required this.balls,
-  }
-  ) : super(key: key);
-
-  @override
-  Widget build(BuildContext context) {
-    final isDark = Theme.of(context).brightness == Brightness.dark;
-    final today = DateFormat('d MMMM').format(DateTime.now());
-
-    return Center(
-      child: AnimatedContainer(
-        duration: const Duration(milliseconds: 600),
-        curve: Curves.easeInOut,
-        padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 20),
-        width: 260,
-        decoration: BoxDecoration(
-          borderRadius: BorderRadius.circular(20),
-          color: isDark ? Colors.white10 : Colors.white,
-          border: Border.all(
-            color: isDark ? Colors.white12 : Colors.grey.shade300,
-            width: 1,
-          ),
-          boxShadow: [
-            BoxShadow(
-              color: Colors.black.withOpacity(0.05),
-              blurRadius: 10,
-              offset: const Offset(0, 4),
-            ),
-          ],
-        ),
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            // 🗓️ Dynamic Date
-            Text(
-              today,
-              style: TextStyle(
-                fontSize: 12,
-                color: isDark ? Colors.grey[400] : Colors.grey[600],
-              ),
-            ),
-            const SizedBox(height: 4),
-
-            // 🏆 Match Name
-            Text(
-              matchType,
-              textAlign: TextAlign.center,
-              style: TextStyle(
-                fontWeight: FontWeight.bold,
-                fontSize: 15,
-                color: isDark ? Colors.tealAccent : Colors.indigo.shade700,
-              ),
-            ),
-            const SizedBox(height: 4),
-
-            // 🧢 Team Name
-            Text(
-              teamName,
-              style: TextStyle(
-                fontWeight: FontWeight.w600,
-                fontSize: 16,
-                color: isDark ? Colors.white : Colors.deepOrange.shade700,
-              ),
-            ),
-
-            // 🔁 Innings Info
-            Text(
-              isSecondInnings ? '2nd Innings' : '1st Innings',
-              style: TextStyle(
-                fontSize: 13,
-                color: isDark ? Colors.grey[400] : Colors.grey[600],
-              ),
-            ),
-            const SizedBox(height: 16),
-
-            // 🧮 Glowing Score
-            TweenAnimationBuilder(
-              tween: IntTween(begin: 0, end: runs),
-              duration: const Duration(milliseconds: 600),
-              builder: (context, value, child) {
-                final isMilestone = value >= 50;
-                final isCentury = value >= 100;
-                final glowColor = isCentury
-                    ? Colors.deepOrangeAccent
-                    : Colors.blueAccent;
-
-
-                return AnimatedContainer(
-                  duration: const Duration(milliseconds: 500),
-                  padding:
-                  const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
-                  decoration: BoxDecoration(
-                    borderRadius: BorderRadius.circular(16),
-                    boxShadow: isMilestone
-                        ? [
-                      BoxShadow(
-                        color: glowColor.withOpacity(0.4),
-                        blurRadius: 10,
-                        spreadRadius: 1,
-                      ),
-                    ]
-                        : [],
-                  ),
-                  child: Text(
-                    '$value - $wickets${isCentury ? " 🔥" : ""}',
-                    textAlign: TextAlign.center,
-                    style: TextStyle(
-                      fontSize: 42,
-                      fontWeight: FontWeight.bold,
-                      color: isMilestone
-                          ? glowColor
-                          : (isDark ? Colors.white : Colors.black87),
-
-                      shadows: isMilestone
-                          ? [
-                        Shadow(
-                          color: glowColor.withOpacity(0.3),
-                          blurRadius: 8,
-                          offset: const Offset(0, 2),
-                        )
-                      ]
-                          : [],
-                    ),
-                  ),
-                );
-              },
-            ),
-
-            const SizedBox(height: 6),
-
-            // ⏱️ Overs
-            Text(
-              'Overs: $overs.$balls',
-              style: TextStyle(
-                fontSize: 13,
-                color: isDark ? Colors.grey[300] : Colors.grey[700],
-              ),
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-}
-
-
+enum OutBatsman { striker, nonStriker }
 
 class _AddScoreScreenState extends State<AddScoreScreen>
 {
@@ -225,7 +73,7 @@ class _AddScoreScreenState extends State<AddScoreScreen>
   String? matchName;
   bool _inningsOver = false;
   bool _isSubmitting = false;
-
+  bool _isEnding     = false;
   // Batsmen
   int onStrikeRuns    = 0;
   int nonStrikeRuns   = 0;
@@ -240,19 +88,37 @@ class _AddScoreScreenState extends State<AddScoreScreen>
   int bowlerMaidens        = 0;
   String bowlerOversBowled = '';
   double bowlerEconomy     = 0;
-
+  bool _isScoringDisabled = false;
 
   final Set<int> _usedBatsmen = {};
   final Set<int> _usedBowlers = {};
-
-
-  Map<int, int> _bowlerOversMap = {};
+  Map<int,double> _bowlerOversMap = {};
   int? _lastBowlerId;
   int _matchOvers = 0;
   int _bowlerMaxOvers = 0;
+  final ChangeNotifier _lastSixBallsRefresher = ChangeNotifier();
+
+  // squads for innings swap
+  late List<Map<String, dynamic>> _team1Squad;
+  late List<Map<String, dynamic>> _team2Squad;
+  bool _isSecondInning = false;
+
+// inside _AddScoreScreenState
+  int _firstInningScore = 0;
+  double requiredRunRate = 0.0;
+  String? matchResultStatus; // 🏆 or ❌ or 🤝
+  Color? matchResultColor;   // Green, Red, Orange
+  bool isCloseMatch = false; // ⚠️ for UI animation
 
 
 
+
+// Batsmen
+  int onStrikeBalls = 0;
+  int nonStrikeBalls = 0;
+  int? _currentWicketKeeperId;
+  String? _currentWicketKeeperName;
+  List<int> _dismissedBatters = [];
 
   List<String> timeline = [];
   final Set<String> _submittedBalls = {};
@@ -260,66 +126,209 @@ class _AddScoreScreenState extends State<AddScoreScreen>
   @override
   void initState() {
     super.initState();
-    _init();
+    WidgetsBinding.instance.addPostFrameCallback((_) => _init());
   }
+
+  @override
+  void dispose() {
+    _lastSixBallsRefresher.dispose();
+    super.dispose();
+  }
+
 
   Future<void> _init() async {
     try {
-      // Step 1: Run both in parallel
-      final matchDetailsFuture = _fetchMatchDetails();
-      final scoreDataFuture = widget.currentScoreData != null
-          ? Future.value(widget.currentScoreData!)
-          : _fetchCurrentScoreData(); // ← this gets latest score on open
+      await _fetchMatchDetails(); // ✅ Step 1: Get match details
+      await _loadSquads();        // ✅ Step 2: Load players based on inning
 
-
-      // Step 2: Wait for both
-      await matchDetailsFuture;
-      final scoreData = await scoreDataFuture;
-
-      // Step 3: Parse score
+      final scoreData = await _fetchCurrentScoreData(); // ✅ Step 3: Get current score
       if (scoreData != null) {
         _parseCurrentScore(scoreData);
       }
 
-      // Step 4: Use preloaded squads if available
-      if (widget.preloadedBattingSquad != null &&
-          widget.preloadedBowlingSquad != null) {
-        _battingSidePlayers = widget.preloadedBattingSquad!;
-        _bowlingSidePlayers = widget.preloadedBowlingSquad!;
-      } else {
-        _loadSquads(); // defer actual fetch after frame
+      // ✅ Step 4: Manual player selection if API returns nothing
+      if (onStrikePlayerId == null || nonStrikePlayerId == null || bowlerId == null) {
+        Future.delayed(Duration(milliseconds: 300), () async {
+          await _showSelectPlayerSheet(isBatsman: true, selectForStriker: true);   // striker
+          await _showSelectPlayerSheet(isBatsman: true, selectForStriker: false);  // non-striker
+          await _showSelectPlayerSheet(isBatsman: false);                           // bowler
+        });
       }
 
-      setState(() {}); // Final UI refresh
-
+      setState(() {}); // ✅ Final UI refresh
     } catch (e) {
       _showError('❌ Failed to load match or score data');
     }
   }
 
 
+  /// 4.3 Reset and swap into 2nd innings
+  void _startSecondInning() {
+    if (_isSecondInning) return;
 
+    setState(() {
+      _isSecondInning   = true;
+      _firstInningClosed = true;
+
+      // reset counters
+      overNumber  = 0;
+      ballNumber  = 1;
+      runs        = 0;
+      wickets     = 0;
+      totalExtras = 0;
+      currentRunRate = 0;
+      int _firstInningScore = 0; // Will be set only after first inning is complete
+
+
+      // clear players & tracking
+      _resetInningPlayers();
+      _usedBatsmen.clear();
+      _usedBowlers.clear();
+      _bowlerOversMap.clear();
+      _lastBowlerId = null;
+
+      // clear timeline / submitted keys
+      timeline.clear();
+      _submittedBalls.clear();
+
+      // swap squads (we already reloaded them in _loadSquads())
+      // but keep these two lines to be explicit if you rely on cached _team1Squad/_team2Squad
+      _battingSidePlayers = _team2Squad;
+      _bowlingSidePlayers = _team1Squad;
+    });
+
+    debugPrint('🔄 Second innings local state reset & squads swapped.');
+  }
+
+  void _resetInningPlayers() {
+    onStrikePlayerId = null;
+    onStrikeName     = null;
+    onStrikeRuns     = 0;
+
+    nonStrikePlayerId = null;
+    nonStrikeName     = null;
+    nonStrikeRuns     = 0;
+
+    bowlerId = null;
+    bowlerName = null;
+    bowlerRunsConceded = 0;
+    bowlerWickets      = 0;
+    bowlerMaidens      = 0;
+    bowlerOversBowled  = '';
+    bowlerEconomy      = 0.0;
+
+    selectedRuns  = null;
+    selectedExtra = null;
+    isWicket      = false;
+    wicketType    = null;
+    _isFreeHit    = false;
+  }
+
+  Future<int?> _pickBowlingSidePlayer({
+    required String title,
+  }) async {
+    int? selectedId;
+
+    return showDialog<int>(
+      context: context,
+      builder: (ctx) {
+        return AlertDialog(
+          title: Text(title),
+          content: SizedBox(
+            width: double.maxFinite,
+            height: 320,
+            child: ListView.builder(
+              itemCount: _bowlingSidePlayers.length,
+              itemBuilder: (_, i) {
+                final p = _bowlingSidePlayers[i];
+                final id = p['id'] as int;
+                final name = (p['name'] ??
+                    p['display_name'] ??
+                    p['user_login'] ??
+                    'Unknown') as String;
+                return RadioListTile<int>(
+                  title: Text(name),
+                  value: id,
+                  groupValue: selectedId,
+                  onChanged: (v) {
+                    selectedId = v;
+                    (ctx as Element).markNeedsBuild();
+                  },
+                );
+              },
+            ),
+          ),
+          actions: [
+            TextButton(onPressed: () => Navigator.pop(ctx), child: const Text('Cancel')),
+            ElevatedButton(
+              onPressed: () {
+                if (selectedId != null) Navigator.pop(ctx, selectedId);
+              },
+              child: const Text('Confirm'),
+            ),
+          ],
+        );
+      },
+    );
+  }
+
+  Future<void> _selectInitialSecondInningPlayers() async {
+    // striker
+    await _showSelectPlayerSheet(isBatsman: true, selectForStriker: true);
+    // non-striker
+    await _showSelectPlayerSheet(isBatsman: true, selectForStriker: false);
+    // bowler
+    await _showSelectPlayerSheet(isBatsman: false);
+  }
 
   Future<void> _undoLastBall() async {
-    // 1. Call the service
-    final ok = await MatchScoreService.undoLastBall(widget.matchId, widget.token,context);
+    // 1. Call undo service
+    final ok = await MatchScoreService.undoLastBall(widget.matchId, widget.token, context);
     if (!ok) {
       _showError('❌ Could not undo last ball.');
       return;
     }
 
-    // 2. Remove the most recent entry from timeline & submitted set
+    print('⏪ Undo successful');
+
+    // 2. Remove last entry from timeline
     if (timeline.isNotEmpty) timeline.removeAt(0);
-    // We know submittedBalls stores strings like "over.ball"
-    // so you could keep track of the last key you pushed
-    // For simplicity, clear and re-fetch from server:
-    _submittedBalls.clear();
+    _submittedBalls.clear(); // so ball can be submitted again
 
-    // 3. Re-fetch the latest score & re-parse
+    // 3. Re-fetch live score from backend
     final fresh = await _fetchCurrentScoreData();
-    if (fresh != null) _parseCurrentScore(fresh);
+    if (fresh != null) {
+      _parseCurrentScore(fresh);
+    }
 
-    // 4. Update provider / UI
+    // 4. Reset used player lists
+    _usedBatsmen.clear();
+    _usedBowlers.clear();
+    _dismissedBatters.clear(); // 💡 Also clear dismissed batters
+    _isScoringDisabled = false; // ✅ Re-enable scoring after undo
+
+    final inningScore = fresh?['current_score']?['current_inning'];
+    final batsmen = inningScore?['batting_score'] ?? [];
+    final bowlers = inningScore?['bowling_score'] ?? [];
+    final outPlayers = fresh?['current_score']?['current_inning']?['score']?['out_players'] ?? [];
+
+    // Re-populate used batsmen and dismissed players
+    for (final b in batsmen) {
+      final id = int.tryParse(b['player_id'].toString());
+      if (id != null) _usedBatsmen.add(id);
+    }
+
+    for (final b in bowlers) {
+      final id = int.tryParse(b['player_id'].toString());
+      if (id != null) _usedBowlers.add(id);
+    }
+
+    for (final p in outPlayers) {
+      final id = int.tryParse(p.toString());
+      if (id != null) _dismissedBatters.add(id);
+    }
+
+    // 5. Update match state provider
     Provider.of<MatchState>(context, listen: false).updateScore(
       matchId: widget.matchId,
       runs: runs,
@@ -328,451 +337,229 @@ class _AddScoreScreenState extends State<AddScoreScreen>
       ball: ballNumber,
     );
 
+    // 6. Refresh last six balls widget (TV/score strip)
+    _lastSixBallsRefresher.notifyListeners();
+
+    // 7. Clear input UI
+    _resetInputs();
+
+    // 8. Refresh UI
     setState(() {});
   }
+  Future<void> _handleEndInning() async {
+    if (_isEnding) return;
+    setState(() => _isEnding = true);
 
-  Future<String?> _showChangeReasonDialog(String type) async {
-    String? selectedReason;
-    String customReason = '';
+    try {
+      final success = await MatchScoreService.endInning(
+        matchId: widget.matchId,
+        token: widget.token,
+      );
 
-    return showDialog<String>(
-      context: context,
-      barrierDismissible: false,
-      builder: (_) => StatefulBuilder(
-        builder: (context, setSt) => AlertDialog(
-          title: Text("Why are you changing the $type?"),
-          content: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              RadioListTile<String>(
-                title: const Text("Injured"),
-                value: "Injured",
-                groupValue: selectedReason,
-                onChanged: (val) => setSt(() => selectedReason = val),
-              ),
-              RadioListTile<String>(
-                title: const Text("Retired Hurt"),
-                value: "Retired Hurt",
-                groupValue: selectedReason,
-                onChanged: (val) => setSt(() => selectedReason = val),
-              ),
-              RadioListTile<String>(
-                title: const Text("Tactical Change"),
-                value: "Tactical Change",
-                groupValue: selectedReason,
-                onChanged: (val) => setSt(() => selectedReason = val),
-              ),
-              RadioListTile<String>(
-                title: const Text("Other"),
-                value: "Other",
-                groupValue: selectedReason,
-                onChanged: (val) => setSt(() => selectedReason = val),
-              ),
-              if (selectedReason == "Other")
-                TextField(
-                  autofocus: true,
-                  onChanged: (val) => customReason = val,
-                  decoration: const InputDecoration(hintText: "Enter reason"),
-                ),
-            ],
-          ),
-          actions: [
-            TextButton(
-              onPressed: () => Navigator.pop(context),
-              child: const Text("Cancel"),
-            ),
-            ElevatedButton(
-              onPressed: () {
-                final result = selectedReason == "Other"
-                    ? customReason.trim()
-                    : selectedReason;
-                if (result == null || result.isEmpty) {
-                  _showError("Please select or enter a reason.");
-                } else {
-                  Navigator.pop(context, result);
-                }
-              },
-              child: const Text("Confirm"),
-            ),
-          ],
-        ),
-      ),
-    );
-  }
+      if (!success) {
+        _showError('Failed to end innings ❌');
+        return;
+      }
 
-  Future<void> _handleWicketSelection() async {
-    final result = await _showWicketTypeDialog();
-    if (result == null) return;
+      final ok = await _fetchMatchDetails();
+      if (!ok) {
+        _showError('Failed to refresh match details after ending innings.');
+        return;
+      }
 
-    final selectedType = result['type'] as String;
-    final runsBeforeOut = result['runs'] as int? ?? 0;
+      await _loadSquads();
+      _startSecondInning();
 
-    setState(() {
-      isWicket = true;
-      wicketType = selectedType;       // ✅ Store this for _submitScore()
-      selectedRuns = runsBeforeOut;    // ✅ Store runs taken before wicket
-    });
+      setState(() {
+        overNumber = 0;
+        ballNumber = 1;
+        runs = 0;
+        wickets = 0;
+        timeline = ['2nd innings started'];
+      });
 
-    await _submitScore(); // ✅ Submit only after setting data
-  }
+      // ✅ Select new players for 2nd innings
+      Future.delayed(const Duration(milliseconds: 300), _selectInitialSecondInningPlayers);
 
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('2nd Innings started ✅')),
+      );
+    } catch (e) {
+      _showError('Error ending innings: $e');
+    } finally {
+      setState(() {
+        _isEnding = false;
 
-
-  int _parseInt(dynamic raw) {
-    if (raw is int) return raw;
-    return int.tryParse(raw?.toString() ?? '') ?? 0;
-  }
-
-  Future<int?> _showExtraRunDialog(String title, String prefix) async {
-    final controller = TextEditingController();
-
-    return showModalBottomSheet<int>(
-      context: context,
-      isScrollControlled: true,
-      shape: const RoundedRectangleBorder(
-        borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
-      ),
-      builder: (context) {
-        return Padding(
-          padding: EdgeInsets.only(
-            left: 16,
-            right: 16,
-            bottom: MediaQuery.of(context).viewInsets.bottom + 16,
-            top: 24,
-          ),
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              Text(title, style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
-              const SizedBox(height: 16),
-              Wrap(
-                spacing: 12,
-                runSpacing: 12,
-                children: List.generate(7, (i) {
-                  return ElevatedButton(
-                    style: ElevatedButton.styleFrom(
-                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-                    ),
-                    onPressed: () => Navigator.pop(context, i),
-                    child: Text('$prefix + $i'),
-                  );
-                }),
-              ),
-              const SizedBox(height: 16),
-              Row(
-                children: [
-                  const Text("Custom:"),
-                  const SizedBox(width: 8),
-                  Expanded(
-                    child: TextField(
-                      controller: controller,
-                      keyboardType: TextInputType.number,
-                      decoration: const InputDecoration(
-                        hintText: "Enter runs",
-                        border: OutlineInputBorder(),
-                        contentPadding: EdgeInsets.symmetric(horizontal: 12),
-                      ),
-                    ),
-                  ),
-                  const SizedBox(width: 8),
-                  ElevatedButton(
-                    onPressed: () {
-                      final val = int.tryParse(controller.text);
-                      if (val != null) Navigator.pop(context, val);
-                    },
-                    child: const Text("OK"),
-                  )
-                ],
-              )
-            ],
-          ),
-        );
-      },
-    );
-  }
-  Future<Map<String, dynamic>?> _showWicketTypeDialog() async {
-    final types = [
-      {'label': 'Bowled', 'icon': Icons.sports_cricket, 'allowRuns': false},
-      {'label': 'Caught', 'icon': Icons.sports_handball, 'allowRuns': false},
-      {'label': 'Caught Behind', 'icon': Icons.record_voice_over, 'allowRuns': false},
-      {'label': 'LBW', 'icon': Icons.remove_circle, 'allowRuns': false},
-      {'label': 'Stumped', 'icon': Icons.cancel, 'allowRuns': false},
-      {'label': 'Run Out', 'icon': Icons.directions_run, 'allowRuns': true},
-      {'label': 'Run Out (Mankaded)', 'icon': Icons.block, 'allowRuns': true},
-      {'label': 'Retired Hurt', 'icon': Icons.healing, 'allowRuns': true},
-      {'label': 'Caught & Bowled', 'icon': Icons.reply_all, 'allowRuns': false},
-      {'label': 'Absent Hurt', 'icon': Icons.accessibility_new, 'allowRuns': true},
-      {'label': 'Time out', 'icon': Icons.timer_off, 'allowRuns': false},
-      {'label': 'Hit Ball Twice', 'icon': Icons.replay_circle_filled_outlined, 'allowRuns': false},
-    ];
-
-    String? selectedType;
-    bool allowRunInput = false;
-    final runController = TextEditingController();
-
-    return showModalBottomSheet<Map<String, dynamic>>(
-      context: context,
-      isScrollControlled: true,
-      shape: const RoundedRectangleBorder(
-        borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
-      ),
-      builder: (context) => StatefulBuilder(
-        builder: (context, setState) {
-          return Padding(
-            padding: EdgeInsets.only(
-              left: 16,
-              right: 16,
-              bottom: MediaQuery.of(context).viewInsets.bottom + 16,
-              top: 24,
-            ),
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                const Text('Select Wicket Type', style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
-                const SizedBox(height: 16),
-                GridView.count(
-                  crossAxisCount: 3,
-                  shrinkWrap: true,
-                  crossAxisSpacing: 16,
-                  mainAxisSpacing: 16,
-                  children: types.map((t) {
-                    final isSelected = selectedType == t['label'];
-                    return GestureDetector(
-                      onTap: () {
-                        setState(() {
-                          selectedType = t['label'] as String;
-                          allowRunInput = t['allowRuns'] as bool;
-                        });
-                      },
-                      child: Container(
-                        decoration: BoxDecoration(
-                          color: isSelected ? Colors.red.shade100 : Colors.red.shade50,
-                          borderRadius: BorderRadius.circular(16),
-                          border: Border.all(
-                            color: isSelected ? Colors.red : Colors.redAccent.withOpacity(0.3),
-                            width: isSelected ? 2 : 1,
-                          ),
-                        ),
-                        padding: const EdgeInsets.symmetric(vertical: 12),
-                        child: Column(
-                          mainAxisAlignment: MainAxisAlignment.center,
-                          children: [
-                            Icon(t['icon'] as IconData, size: 32, color: Colors.redAccent),
-                            const SizedBox(height: 8),
-                            Text(
-                              t['label'] as String,
-                              style: const TextStyle(fontSize: 12),
-                              textAlign: TextAlign.center,
-                            ),
-                          ],
-                        ),
-                      ),
-                    );
-                  }).toList(),
-                ),
-                const SizedBox(height: 16),
-                if (allowRunInput) ...[
-                  const Text("Runs taken before dismissal"),
-                  const SizedBox(height: 8),
-                  TextField(
-                    controller: runController,
-                    keyboardType: TextInputType.number,
-                    decoration: const InputDecoration(
-                      hintText: "Enter runs (optional)",
-                      border: OutlineInputBorder(),
-                    ),
-                  ),
-                ],
-                const SizedBox(height: 16),
-                Row(
-                  mainAxisAlignment: MainAxisAlignment.end,
-                  children: [
-                    TextButton(
-                      onPressed: () => Navigator.pop(context),
-                      child: const Text("Cancel"),
-                    ),
-                    ElevatedButton(
-                      onPressed: () {
-                        if (selectedType == null) {
-                          ScaffoldMessenger.of(context).showSnackBar(
-                            const SnackBar(content: Text("Please select a wicket type")),
-                          );
-                          return;
-                        }
-
-                        final runVal = int.tryParse(runController.text);
-                        Navigator.pop(context, {
-                          'type': selectedType,
-                          'runs': allowRunInput ? (runVal ?? 0) : null,
-                        });
-                      },
-                      child: const Text("Confirm"),
-                    )
-                  ],
-                )
-              ],
-            ),
-          );
-        },
-      ),
-    );
-  }
-  void _parseCurrentScore(Map<String, dynamic> body) {
-    final currentScore = body['current_score'];
-    if (currentScore == null) return;
-
-    final inning = currentScore['current_inning'];
-    if (inning == null || inning['score'] == null) return;
-
-    final cs = inning['score'] as Map<String, dynamic>;
-
-    final doneOvers = _parseInt(cs['overs_done']);
-    final doneBalls = _parseInt(cs['balls_done']);
-    final totalBalls = (doneOvers * 6) + doneBalls;
-
-    // ✅ Clear and reconstruct submitted balls set
-    _submittedBalls.clear();
-    for (int i = 0; i < totalBalls; i++) {
-      final over = i ~/ 6;
-      final ball = (i % 6) + 1;
-      _submittedBalls.add('$over.$ball');
+        // ✅ STEP: Reset scoring inputs here
+        _resetInputs();
+      });
     }
+  }
 
-    // ✅ Compute next ball
-    final nextBall = (doneBalls % 6) + 1;
-    final overAdjustment = (doneBalls % 6 == 0 && doneBalls > 0) ? 1 : 0;
-    final nextOver = doneOvers + overAdjustment;
 
-    if (!mounted) return;
 
-    setState(() {
-      runs = _parseInt(cs['total_runs']);
-      wickets = _parseInt(cs['total_wkts']); // ✅ Correct field to show in UI
-      overNumber = nextOver;
-      ballNumber = nextBall;
+  Future<bool> _fetchMatchDetails() async {
+    try {
+      final uri = Uri.parse(
+        'https://cricjust.in/wp-json/custom-api-for-cricket/get-single-cricket-match'
+            '?api_logged_in_token=${widget.token}&match_id=${widget.matchId}',
+      );
 
-      totalExtras    = _parseInt(cs['total_extra']);
-      currentRunRate = double.tryParse(cs['current_run_rate'].toString()) ?? 0;
-
-      // ✅ On-strike batsman
-      final on = cs['on_strike'] as Map<String, dynamic>?;
-      if (on != null) {
-        onStrikePlayerId = _parseInt(on['id']);
-        onStrikeName = on['name']?.toString();
-        onStrikeRuns = _parseInt(on['runs']);
+      final res = await http.get(uri);
+      if (res.statusCode != 200) {
+        debugPrint('get-single-cricket-match HTTP ${res.statusCode}');
+        return false;
       }
 
-      // ✅ Non-strike batsman
-      final non = cs['non_strike'] as Map<String, dynamic>?;
-      if (non != null) {
-        nonStrikePlayerId = _parseInt(non['id']);
-        nonStrikeName = non['name']?.toString();
-        nonStrikeRuns = _parseInt(non['runs']);
+      final body = json.decode(res.body) as Map<String, dynamic>;
+      if (body['status'] != 1) {
+        debugPrint('get-single-cricket-match status != 1 -> $body');
+        return false;
       }
 
-      // ✅ Bowler data
-      final bw = cs['bowler'] as Map<String, dynamic>?;
-      if (bw != null) {
-        bowlerId = _parseInt(bw['id']);
-        bowlerName = bw['name']?.toString();
+      // API sometimes returns list, sometimes empty
+      final dataList = body['data'];
+      if (dataList is! List || dataList.isEmpty) {
+        debugPrint('get-single-cricket-match data empty');
+        return false;
+      }
+      final data = dataList.first as Map<String, dynamic>;
 
-        final data = bw['data'] as Map<String, dynamic>?;
-        if (data != null) {
-          bowlerRunsConceded = _parseInt(data['runs']);
-          bowlerWickets      = _parseInt(data['wickets']);
-          bowlerMaidens      = _parseInt(data['maiden']);
-          bowlerOversBowled  = data['overs']?.toString() ?? '';
-          bowlerEconomy      = double.tryParse(data['economy'].toString()) ?? 0;
+      // --- helpers ---
+      int toInt(dynamic v) {
+        if (v is int) return v;
+        if (v is String) return int.tryParse(v) ?? 0;
+        return 0;
+      }
+
+      List<int> parseXI(dynamic raw) {
+        if (raw == null) return [];
+        if (raw is String) {
+          if (raw.trim().isEmpty) return [];
+          return raw
+              .split(',')
+              .map((e) => int.tryParse(e.trim()) ?? 0)
+              .where((e) => e > 0)
+              .toList();
         }
+        if (raw is List) {
+          return raw.map((e) => toInt(e)).where((e) => e > 0).toList();
+        }
+        return [];
       }
 
-      // ✅ Timeline
-      final timelineRaw = inning['timeline'] as List<dynamic>?;
-      if (timelineRaw != null && timelineRaw.isNotEmpty) {
-        timeline = timelineRaw
-            .map((e) => e.toString())
-            .where((line) => RegExp(r'^\d+\.\d+:').hasMatch(line))
-            .toList();
-      } else {
-        timeline = [
-          'Previous score loaded: $runs - $wickets at Over $overNumber.$ballNumber'
-        ];
-      }
+      final matchNameLocal           = data['match_name']?.toString();
+      final teamOneIdLocal           = toInt(data['team_one']);
+      final teamTwoIdLocal           = toInt(data['team_two']);
+      final teamOne11Local           = parseXI(data['team_one_11']);
+      final teamTwo11Local           = parseXI(data['team_two_11']);
+      final firstInningTeamIdLocal   = toInt(data['first_inning']);
+      final firstInningClosedLocal   = toInt(data['is_first_inning_closed']) == 1;
+      final matchOversLocal          = toInt(data['match_overs']);
+      final bowlerMaxOversLocal      = toInt(data['ballers_max_overs']);
 
-      // ✅ Debug
-      print('🏏 Runs: $runs | Wickets: $wickets');
-      print('🎯 API Strike: ${on?['name']} | Non-Strike: ${non?['name']}');
-      print('🔁 Ball: $overNumber.$ballNumber');
-    });
+      // Pick current batting team name for UI
+      final teamOneName = data['team_one_name']?.toString() ?? '';
+      final teamTwoName = data['team_two_name']?.toString() ?? '';
+      final currentBattingTeamId = !firstInningClosedLocal
+          ? firstInningTeamIdLocal
+          : (firstInningTeamIdLocal == teamOneIdLocal ? teamTwoIdLocal : teamOneIdLocal);
+      final teamNameLocal = currentBattingTeamId == teamOneIdLocal ? teamOneName : teamTwoName;
+
+      if (!mounted) return false;
+      setState(() {
+        matchName        = matchNameLocal;
+        _teamOneId       = teamOneIdLocal;
+        _teamTwoId       = teamTwoIdLocal;
+        _teamOne11       = teamOne11Local;
+        _teamTwo11       = teamTwo11Local;
+        _firstInningTeamId = firstInningTeamIdLocal;
+        _firstInningClosed = firstInningClosedLocal;
+        _matchOvers      = matchOversLocal;
+        _bowlerMaxOvers  = bowlerMaxOversLocal;
+        teamName         = teamNameLocal;
+      });
+
+      // sanity logs
+      debugPrint('match: $matchName, team1=$_teamOneId (${_teamOne11.length}), '
+          'team2=$_teamTwoId (${_teamTwo11.length}), firstInning=$_firstInningTeamId, '
+          'closed=$_firstInningClosed, overs=$_matchOvers, maxBowler=$_bowlerMaxOvers');
+
+      return true;
+    } catch (e, st) {
+      debugPrint('fetchMatchDetails error: $e\n$st');
+      return false;
+    }
   }
-
-
-
-
-  Future<void> _fetchMatchDetails() async {
-    final uri = Uri.parse(
-      'https://cricjust.in/wp-json/custom-api-for-cricket/get-single-cricket-match'
-          '?api_logged_in_token=${widget.token}&match_id=${widget.matchId}',
-    );
-    final res = await http.get(uri);
-    final body = json.decode(res.body) as Map<String, dynamic>;
-    if (body['status'] != 1) return;
-
-    final data = (body['data'] as List).first as Map<String, dynamic>;
-    if (!mounted) return;
-
-    setState(() {
-      matchName = data['match_name']?.toString(); // ✅ moved here
-      _teamOneId = data['team_one'] as int;
-      _teamTwoId = data['team_two'] as int;
-      _teamOne11 = (data['team_one_11'] as String).split(',').map(int.parse).toList();
-      _teamTwo11 = (data['team_two_11'] as String).split(',').map(int.parse).toList();
-      _firstInningTeamId = data['first_inning'] as int;
-      _firstInningClosed = (data['is_first_inning_closed'] as int) == 1;
-      teamName = data['team_one_name'] as String? ?? '';
-
-      _matchOvers = _parseInt(data['match_overs']);
-      _bowlerMaxOvers = _parseInt(data['ballers_max_overs']);
-    });
-  }
-
 
   Future<void> _loadSquads() async {
-    if (_teamOneId == null || _teamTwoId == null || _firstInningTeamId == null) return;
+    if (_teamOneId == null || _teamTwoId == null || _firstInningTeamId == null) {
+      _showError("Match details not available for squads.");
+      debugPrint('🚫 Missing IDs → team1=$_teamOneId, team2=$_teamTwoId, firstInning=$_firstInningTeamId');
+      return;
+    }
 
+    // Decide who bats/bowls in the CURRENT inning
     final battingTeamId = !_firstInningClosed
         ? _firstInningTeamId!
         : (_firstInningTeamId == _teamOneId ? _teamTwoId! : _teamOneId!);
     final bowlingTeamId = battingTeamId == _teamOneId! ? _teamTwoId! : _teamOneId!;
+
     final battingIds = battingTeamId == _teamOneId! ? _teamOne11 : _teamTwo11;
     final bowlingIds = bowlingTeamId == _teamOneId! ? _teamOne11 : _teamTwo11;
 
-    final squadA = await PlayerService.fetchTeamPlayers(
-        teamId: battingTeamId, apiToken: widget.token);
-    final squadB = await PlayerService.fetchTeamPlayers(
-        teamId: bowlingTeamId, apiToken: widget.token);
+    debugPrint('🧠 Inning=${_firstInningClosed ? "2nd" : "1st"} '
+        '| BattingTeamID=$battingTeamId | BowlingTeamID=$bowlingTeamId');
+    debugPrint('📋 Batting XI IDs  : ${battingIds.join(",")}');
+    debugPrint('📋 Bowling XI IDs  : ${bowlingIds.join(",")}');
 
-    if (!mounted) return;
+    try {
+      // Fetch BOTH full squads once
+      final t1 = await PlayerService.fetchTeamPlayers(teamId: _teamOneId!, apiToken: widget.token);
+      final t2 = await PlayerService.fetchTeamPlayers(teamId: _teamTwoId!, apiToken: widget.token);
 
-    setState(() {
-      _battingSidePlayers = squadA.map((p) {
-        final rawId = p['ID'];
-        final id = rawId is int ? rawId : int.tryParse('$rawId') ?? 0;
+      // Cache team squads for later swaps
+      _team1Squad = t1
+          .map<Map<String, dynamic>>((p) {
+        final id = int.tryParse('${p['ID']}') ?? 0;
         return {'id': id, 'name': p['display_name'] as String};
-      }).where((p) =>
-      battingIds.contains(p['id']) &&
-          p['id'] != onStrikePlayerId &&
-          p['id'] != nonStrikePlayerId
-      ).toList();
+      })
+          .where((p) => p['id'] > 0)
+          .toList();
 
-      _bowlingSidePlayers = squadB.map((p) {
-        final rawId = p['ID'];
-        final id = rawId is int ? rawId : int.tryParse('$rawId') ?? 0;
+      _team2Squad = t2
+          .map<Map<String, dynamic>>((p) {
+        final id = int.tryParse('${p['ID']}') ?? 0;
         return {'id': id, 'name': p['display_name'] as String};
-      }).where((p) => bowlingIds.contains(p['id'])).toList();
-    });
+      })
+          .where((p) => p['id'] > 0)
+          .toList();
+
+      debugPrint('🧍 Team1 squad fetched = ${_team1Squad.length}, Team2 squad fetched = ${_team2Squad.length}');
+
+      // Pick the CURRENT inning batting/bowling squads filtered by XI
+      final fullBattingSquad = battingTeamId == _teamOneId! ? _team1Squad : _team2Squad;
+      final fullBowlingSquad = bowlingTeamId == _teamOneId! ? _team1Squad : _team2Squad;
+
+      final mappedBatting = fullBattingSquad.where((p) => battingIds.contains(p['id'] as int)).toList();
+      final mappedBowling = fullBowlingSquad.where((p) => bowlingIds.contains(p['id'] as int)).toList();
+
+      debugPrint('✅ Final battingSidePlayers  = ${mappedBatting.length}');
+      debugPrint('✅ Final bowlingSidePlayers  = ${mappedBowling.length}');
+
+      setState(() {
+        _battingSidePlayers = mappedBatting;
+        _bowlingSidePlayers = mappedBowling;
+      });
+
+      if (_battingSidePlayers.isEmpty) {
+        debugPrint('⚠️ Empty battingSidePlayers. Check team_11 values & player IDs.');
+      }
+    } catch (e, st) {
+      _showError("Failed to load squads");
+      debugPrint('❌ Error loading squads: $e\n$st');
+    }
   }
-
 
   Future<Map<String, dynamic>?> _fetchCurrentScoreData() async {
     final uri = Uri.parse(
@@ -784,22 +571,246 @@ class _AddScoreScreenState extends State<AddScoreScreen>
     if (body['status'] != 1 || body['current_score'] == null) return null;
     return body;
   }
+  void _checkMatchResult(Map<String, dynamic> scoreData) {
+    final cs = scoreData['current_score'];
+    final firstInning = cs?['first_inning'];
+    final currentInning = cs?['current_inning']?['score'];
+
+    if (firstInning == null || currentInning == null) return;
+
+    final teamAId = firstInning['team_id'];
+    final teamAName = firstInning['team_name']?.toString() ?? 'Team A';
+    final teamAScore = int.tryParse(firstInning['score']?['total_runs'].toString() ?? '') ?? 0;
+
+    final teamBId = cs?['current_inning']?['team_id'];
+    final teamBName = cs?['current_inning']?['team_name']?.toString() ?? 'Team B';
+    final teamBScore = int.tryParse(currentInning['total_runs'].toString()) ?? 0;
+    final teamBWickets = int.tryParse(currentInning['total_wkts'].toString()) ?? 0;
+
+    // Only proceed if it's second innings
+    if (teamAId == null || teamBId == null || teamAId == teamBId) return;
+
+    final target = teamAScore + 1;
+
+    // ✅ Case 1: Team B has chased successfully
+    if (teamBScore >= target) {
+      final remainingWickets = 10 - teamBWickets;
+      _showMatchEndDialog("🎉 $teamBName won by $remainingWickets wicket(s)");
+      _isScoringDisabled = true;
+      return;
+    }
+
+    // ✅ Case 2: All out and not chased
+    if (teamBWickets >= 10 && teamBScore < target) {
+      final margin = target - 1 - teamBScore;
+      _showMatchEndDialog("🏆 $teamAName won by $margin run(s)");
+      _isScoringDisabled = true;
+      return;
+    }
+
+    // ✅ Case 3: All out but exactly equal
+    if (teamBWickets >= 10 && teamBScore == target - 1) {
+      _showMatchEndDialog("🤝 Match Tied");
+      _isScoringDisabled = true;
+      return;
+    }
+  }
+
+  // Add at the top of your State class:
+  final Map<int, Map<String, dynamic>> _bowlerStatsMap = {};
+
+// …
+
+  void _parseCurrentScore(Map<String, dynamic> body, {bool overridePlayers = true}) {
+    debugPrint('🔄 _parseCurrentScore called');
+
+    // 1) Validate JSON
+    final csRoot = body['current_score'] as Map<String, dynamic>?;
+    if (csRoot == null) {
+      debugPrint('⚠️ No current_score in response');
+      return;
+    }
+    final inning = csRoot['current_inning'] as Map<String, dynamic>?;
+    if (inning == null || inning['score'] == null) {
+      debugPrint('⚠️ No current_inning/score');
+      return;
+    }
+    final cs = inning['score'] as Map<String, dynamic>;
+
+    // 2) Build a map of all bowlers’ stats from bowling_score
+    _bowlerStatsMap.clear();
+    final bowlingList = inning['bowling_score'] as List<dynamic>? ?? [];
+    for (final b in bowlingList) {
+      final pid = parseInt(b['player_id']);
+      final data = b['data'] as Map<String, dynamic>? ?? {};
+      _bowlerStatsMap[pid] = {
+        'runs': parseInt(data['runs']),
+        'wickets': parseInt(data['wickets']),
+        'maiden': parseInt(data['maiden']),
+        'overs': data['overs']?.toString() ?? '0',
+        'econ': double.tryParse(data['economy'].toString()) ?? 0.0,
+      };
+      debugPrint('   statsMap[$pid] = ${_bowlerStatsMap[pid]}');
+    }
+
+    // 3) Also add the current bowler from cs['bowler']
+    final bwSingle = cs['bowler'] as Map<String, dynamic>?;
+    if (bwSingle != null) {
+      final pid = parseInt(bwSingle['id']);
+      final data = bwSingle['data'] as Map<String, dynamic>? ?? {};
+      _bowlerStatsMap[pid] = {
+        'runs'   : parseInt(data['runs']),
+        'wickets': parseInt(data['wickets']),
+        'maiden' : parseInt(data['maiden']),
+        'overs'  : data['overs']?.toString() ?? '0',
+        'econ'   : double.tryParse(data['economy'].toString()) ?? 0.0,
+      };
+      debugPrint('   statsMap[$pid] (current) = ${_bowlerStatsMap[pid]}');
+    }
 
 
+    // 4) Parse completed overs & balls, normalizing 6+ balls
+    int doneOvers = parseInt(cs['overs_done']);
+    int doneBalls = parseInt(cs['balls_done']);
+    if (doneBalls >= 6) {
+      final extra = doneBalls ~/ 6;
+      doneOvers += extra;
+      doneBalls = doneBalls % 6;
+    }
+    final totalBalls = doneOvers * 6 + doneBalls;
+    debugPrint('   doneOvers=$doneOvers, doneBalls=$doneBalls, totalBalls=$totalBalls');
+
+    // Rebuild submittedBalls set
+    _submittedBalls.clear();
+    for (int i = 0; i < totalBalls; i++) {
+      final o = i ~/ 6, b = (i % 6) + 1;
+      _submittedBalls.add('$o.$b');
+    }
+
+    // 5) Compute nextOver/nextBall for submission logic
+    final nextBall   = (doneBalls % 6) + 1;
+    final overAdjust = (doneBalls % 6 == 0 && doneBalls > 0) ? 1 : 0;
+    final nextOver   = doneOvers + overAdjust;
+    debugPrint('   nextOver=$nextOver, nextBall=$nextBall');
+
+    // 6) Grab striker/non-striker
+    final on  = cs['on_strike']  as Map<String, dynamic>?;
+    final non = cs['non_strike'] as Map<String, dynamic>?;
+
+    if (!mounted) return;
+    setState(() {
+      // 7) Core score state
+      runs         = parseInt(cs['total_runs']);
+      wickets      = parseInt(cs['total_wkts']);
+      totalExtras  = parseInt(cs['total_extra']);
+      currentRunRate = double.tryParse(cs['current_run_rate'].toString()) ?? 0.0;
+
+      // <<< DISPLAY the completed delivery, not next >>>
+      // ✅ Compute next over and ball for scoring
+      final nextBall   = (doneBalls % 6) + 1;
+      final overAdjust = (doneBalls % 6 == 0 && doneBalls > 0) ? 1 : 0;
+      final nextOver   = doneOvers + overAdjust;
+
+// ✅ Use next delivery values to avoid duplicate submission error
+      overNumber = nextOver;
+      ballNumber = nextBall;
+
+      _isScoringDisabled = wickets >= 10;
+
+      // First-innings total
+      final firstScore = csRoot['first_inning']?['score'] as Map<String, dynamic>?;
+      if (_firstInningClosed && firstScore != null) {
+        _firstInningScore = parseInt(firstScore['total_runs']);
+      }
+
+// 8) Override batsmen/bowler if needed
+      if (overridePlayers) {
+        if (on != null) {
+          onStrikePlayerId = parseInt(on['id']);
+          onStrikeName     = on['name']?.toString();
+          onStrikeRuns     = parseInt(on['runs']);
+        }
+        if (non != null) {
+          nonStrikePlayerId = parseInt(non['id']);
+          nonStrikeName     = non['name']?.toString();
+          nonStrikeRuns     = parseInt(non['runs']);
+        }
+        if (bwSingle != null) {
+          final sid = parseInt(bwSingle['id']);
+          bowlerId   = sid;
+          bowlerName = bwSingle['name']?.toString();
+          final stats = _bowlerStatsMap[sid]!;
+          bowlerRunsConceded = stats['runs'] as int;
+          bowlerWickets      = stats['wickets'] as int;
+          bowlerMaidens      = stats['maiden'] as int;
+          bowlerOversBowled  = stats['overs'] as String;
+          bowlerEconomy      = stats['econ'] as double;
+        }
+      }
+
+
+      // 9) Rebuild timeline
+      final tl = inning['timeline'] as List<dynamic>?;
+      if (tl != null && tl.isNotEmpty) {
+        timeline = tl
+            .map((e) => e.toString())
+            .where((s) => RegExp(r'^\d+\.\d+:').hasMatch(s))
+            .toList();
+      } else {
+        timeline = ['Loaded: $runs–$wickets at $doneOvers.$doneBalls'];
+      }
+
+      // 10) 2nd-innings result logic (unchanged)…
+      if (_firstInningClosed) {
+        final target    = _firstInningScore + 1;
+        final runsLeft  = target - runs;
+        final ballsLeft = (_matchOvers * 6) - (doneOvers * 6 + doneBalls);
+        requiredRunRate = ballsLeft > 0 ? runsLeft / (ballsLeft / 6) : 0.0;
+
+        if (runs >= target && (wickets < 10 || ballsLeft > 0)) {
+          matchResultStatus = '';
+          matchResultColor  = Colors.transparent;
+        } else if (runs >= target) {
+          matchResultStatus = '🏆 Match Won!';
+          matchResultColor  = Colors.green;
+        } else if (wickets >= 10 || ballsLeft == 0) {
+          if (runs == _firstInningScore) {
+            matchResultStatus = '🤝 Match Tied';
+            matchResultColor  = Colors.orange;
+          } else {
+            matchResultStatus = '❌ Match Lost';
+            matchResultColor  = Colors.red;
+          }
+        } else if (runsLeft <= 10 && ballsLeft <= 6) {
+          isCloseMatch = true;
+        }
+      }
+    });
+  }
+
+
+  //// part3
   Future<void> _submitScore() async {
     if (_isSubmitting) return;
     _isSubmitting = true;
 
-    print('🆔 Submitting run for Match ID: ${widget.matchId}');
-
     try {
-      // 1. Check if innings is already complete
+      debugPrint('🔄 Submitting score for ball $overNumber.$ballNumber');
+
+      // 1️⃣ Prevent scoring if match already won
+      if (_isScoringDisabled) {
+        _showError('🛑 Team already won.');
+        return;
+      }
+
+      // 2️⃣ Check innings completion via API
       final current = await _fetchCurrentScoreData();
+
       if (current != null) {
         final cs = current['current_score']?['current_inning']?['score'];
-        final oversDone = _parseInt(cs?['overs_done']);
-        final ballsDone = _parseInt(cs?['balls_done']);
-        final totalBalls = (oversDone * 6) + ballsDone;
+        final doneOvers = parseInt(cs?['overs_done']);
+        final doneBalls = parseInt(cs?['balls_done']);
+        final totalBalls = doneOvers * 6 + doneBalls;
         final maxBalls = _matchOvers * 6;
         if (totalBalls >= maxBalls) {
           _showError('🚫 Innings already completed.');
@@ -808,79 +819,135 @@ class _AddScoreScreenState extends State<AddScoreScreen>
         }
       }
 
-      // 2. Validate inputs
+      // 3️⃣ Ensure striker, non-striker & bowler are selected
       if (onStrikePlayerId == null || nonStrikePlayerId == null || bowlerId == null) {
         _showError('Please select striker, non-striker, and bowler');
         return;
       }
 
+      // ── 4️⃣ ENFORCE BOWLER MAX-OVERS LIMIT ──
+          {
+        // bowlerOversBowled comes from your API parse, e.g. "2.1"
+        final parts = bowlerOversBowled.split('.');
+        final int bowlerMaj = int.tryParse(parts[0]) ?? 0;
+        final int bowlerMin = parts.length > 1 ? int.tryParse(parts[1]) ?? 0 : 0;
+        final int ballsBowled = bowlerMaj * 6 + bowlerMin;
+        final int maxBowlerBalls = _bowlerMaxOvers * 6;
+        debugPrint('   Bowler has bowled $ballsBowled balls (limit $maxBowlerBalls)');
+        if (ballsBowled >= maxBowlerBalls) {
+          _showError(
+              '🛑 $bowlerName has already bowled their maximum of '
+                  '$_bowlerMaxOvers overs.'
+          );
+          return;
+        }
+      }
+      // ────────────────────────────────────────
+
+      // 5️⃣ Prevent duplicate submission of the same ball
       final ballKey = '$overNumber.$ballNumber';
       if (_submittedBalls.contains(ballKey)) {
         _showError('⚠️ Ball $ballKey already submitted. Please proceed to next ball.');
         return;
       }
 
+      // 6️⃣ Mark players used this delivery
       _usedBatsmen.add(onStrikePlayerId!);
       _usedBatsmen.add(nonStrikePlayerId!);
       _usedBowlers.add(bowlerId!);
 
-      final battingTeamId = !_firstInningClosed
-          ? _firstInningTeamId!
-          : (_firstInningTeamId == _teamOneId! ? _teamTwoId! : _teamOneId!);
-
-      // 3. Calculate runs and legal delivery
-      int totalRuns = 0;
+      // 7️⃣ Compute runs & extras
+      int batterRuns = 0;
+      int extraRuns = 0;
+      String extraType = '0';
       bool legalDelivery = true;
 
       if (selectedExtra != null) {
+        extraType = selectedExtra!;
         switch (selectedExtra) {
           case 'Wide':
-          case 'No Ball':
+            extraRuns = selectedRuns ?? 1;
             legalDelivery = false;
-            totalRuns += selectedRuns ?? 0;
-            if (selectedExtra == 'No Ball') _isFreeHit = true;
+            break;
+          case 'No Ball':
+            batterRuns = selectedRuns ?? 0;
+            extraRuns = 0;
+            legalDelivery = false;
+            _isFreeHit = true;
             break;
           case 'Bye':
           case 'Leg Bye':
-            totalRuns += selectedRuns ?? 0;
+            extraRuns = selectedRuns ?? 0;
+            legalDelivery = true;
             break;
+          default:
+            batterRuns = selectedRuns ?? 0;
         }
       } else {
-        totalRuns = selectedRuns ?? 0;
+        batterRuns = selectedRuns ?? 0;
       }
 
-      // 4. Handle wicket and Free Hit logic
+      // 8️⃣ Handle wicket
       bool wicketFalls = isWicket;
-      if (_isFreeHit && wicketType != 'Run Out') {
-        wicketFalls = false;
-      }
+      if (_isFreeHit && wicketType != 'Run Out') wicketFalls = false;
       if (wicketFalls) wickets++;
 
-      // 5. Wicket mapping: string → number + text
-      final wicketMap = {
-        'Bowled': '1',
-        'Caught': '2',
-        'Caught Behind': '3',
-        'LBW': '4',
-        'Stumped': '5',
-        'Run Out': '6',
-        'Run Out (Mankaded)': '7',
-        'Retired Hurt': '8',
-        'Caught & Bowled': '9',
-        'Absent Hurt': '10',
-        'Time out': '11',
-        'Hit Ball Twice': '12',
-      };
+      final formattedWicketType = wicketFalls
+          ? {
+        'Bowled': 'Bowled',
+        'Caught': 'Caught',
+        'Caught Behind': 'Caught Behind',
+        'LBW': 'LBW',
+        'Stumped': 'Stumped',
+        'Run Out': 'Run Out',
+        'Run Out (Mankaded)': 'Run Out (Mankaded)',
+        'Retired Hurt': 'Retired Hurt',
+        'Caught & Bowled': 'Caught & Bowled',
+        'Absent Hurt': 'Absent Hurt',
+        'Time out': 'Time out',
+        'Hit Ball Twice': 'Hit Ball Twice',
+      }[wicketType ?? ''] ?? '0'
+          : null;
 
-      final formattedWicketType = wicketFalls ? wicketMap[wicketType ?? ''] ?? '0' : null;
-      final wicketTypeTextToSend = wicketFalls ? wicketType : null;
+      int? runOutBy, catchBy;
+      if (wicketFalls && formattedWicketType != null) {
+        if (formattedWicketType.contains('Run Out')) {
+          runOutBy = await _pickBowlingSidePlayer(title: 'Who did the Run Out?');
+          if (runOutBy == null) {
+            _showError('Please select fielder for Run Out');
+            return;
+          }
+        } else if (['Caught','Caught Behind','Caught & Bowled']
+            .contains(formattedWicketType)) {
+          catchBy = formattedWicketType == 'Caught & Bowled'
+              ? bowlerId
+              : await _pickBowlingSidePlayer(title: 'Who took the catch?');
+          if (catchBy == null) {
+            _showError('Please select catcher');
+            return;
+          }
+        }
+      }
 
-      print('✅ Final wicketType sent: $formattedWicketType for $wicketType');
+      // 9️⃣ Ask for shot info if needed
+      String? shotType, shotArea;
+      final skipShot = selectedExtra != null &&
+          ['Bowled','LBW','Wide','Bye','Leg Bye'].contains(selectedExtra);
+      if ((!wicketFalls && !skipShot) ||
+          (wicketFalls && !['Bowled','LBW'].contains(wicketType))) {
+        final res = await showShotTypeDialog(context, onStrikeName ?? '', batterRuns);
+        shotType = res?['shotType']?.trim();
+        shotArea = res?['shotArea']?.trim();
+      }
 
-      // 6. Create request with both numeric and text type
+      // 🔟 Build and send the API request
       final req = MatchScoreRequest(
         matchId: widget.matchId,
-        battingTeamId: battingTeamId,
+        battingTeamId: !_firstInningClosed
+            ? _firstInningTeamId!
+            : (_firstInningTeamId == _teamOneId!
+            ? _teamTwoId!
+            : _teamOneId!),
         onStrikePlayerId: onStrikePlayerId!,
         onStrikePlayerOrder: 1,
         nonStrikePlayerId: nonStrikePlayerId!,
@@ -888,113 +955,165 @@ class _AddScoreScreenState extends State<AddScoreScreen>
         bowler: bowlerId!,
         overNumber: overNumber + 1,
         ballNumber: ballNumber,
-        runs: totalRuns,
-        extraRunType: selectedExtra,
-        extraRun: (selectedExtra != null &&
-            selectedExtra != 'Wide' &&
-            selectedExtra != 'No Ball')
-            ? selectedRuns
-            : null,
+        runs: batterRuns,
+        extraRunType: extraType,
+        extraRun: extraRuns > 0 ? extraRuns : null,
         isWicket: wicketFalls ? 1 : 0,
         wicketType: formattedWicketType,
-        wicketTypeText: wicketTypeTextToSend,
+        shot: shotType,
+        shotArea: shotArea,
+        runOutBy: runOutBy,
+        catchBy: catchBy,
       );
-
-      print('🧮 Sending Over.Ball → $overNumber.$ballNumber');
+      print("📤 Submitting Ball:");
+      print("▶️ runs: $selectedRuns");
+      print("▶️ extra: $selectedExtra");
+      print("▶️ extraType: ${extraType ?? 'none'}");
+      print("▶️ isWicket: $isWicket");
+      print("▶️ wicketType: $wicketType");
 
       final success = await MatchScoreService.submitScore(req, widget.token, context);
       if (!success) {
-        _showError('❌ Failed to submit score. Try again.');
+        _showError('❌ Failed to submit score.');
         return;
       }
 
-      // 7. Optional Shot Type
-      final skipShotTypes = ['Bowled', 'LBW'];
-      if (!wicketFalls || (wicketFalls && !skipShotTypes.contains(wicketType))) {
-        final shot = await showShotTypeDialog(
-          context,
-          onStrikeName ?? 'Batsman',
-          selectedRuns ?? 0,
-        );
-        if (shot != null) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(content: Text('✅ Shot: $shot')),
-          );
-        }
-      }
-
-      // 8. Timeline entry
-      final entry = '$overNumber.$ballNumber: '
-          '${selectedExtra != null ? '$selectedExtra +${selectedRuns ?? 0}' : '$selectedRuns'}'
-          '${wicketFalls ? ' 🧨 Wicket($wicketType)' : ''}';
-      timeline.insert(0, entry);
+      // 1️⃣1️⃣ Local updates
       _submittedBalls.add(ballKey);
-
-      // 9. Swap strike if needed
-      bool didLocalSwap = false;
-      if (legalDelivery && !wicketFalls && (totalRuns % 2) == 1) {
-        _swapStrike();
-        didLocalSwap = true;
-      }
-
-      // 10. Advance ball
-      if (legalDelivery) _advanceBall();
-
-      // 11. Show new batsman selector if out
-      if (wicketFalls) _showBatsmanSelectionAfterWicket();
-
-      // 12. Update state
-      _isFreeHit = false;
-      _resetInputs();
-
-      Provider.of<MatchState>(context, listen: false).updateScore(
-        matchId: widget.matchId,
-        runs: runs,
-        wickets: wickets,
-        over: overNumber,
-        ball: ballNumber,
+      timeline.insert(
+        0,
+        '$overNumber.$ballNumber: '
+            '${selectedExtra!=null?'$selectedExtra +${selectedRuns??0}':'$selectedRuns'}'
+            '${wicketFalls?' 🧨 Wicket($wicketType)':''}',
       );
 
-      // 13. Refresh score from API
-      await Future.delayed(const Duration(milliseconds: 800));
-      final refreshed = await _fetchCurrentScoreData();
-      if (refreshed != null) {
-        _parseCurrentScore(refreshed);
-        if (didLocalSwap) _swapStrike();
-        setState(() {});
+      // 1️⃣2️⃣ Credit runs to striker
+      if (!wicketFalls && batterRuns>0) {
+        onStrikeRuns += batterRuns;
       }
+
+      // 1️⃣3️⃣ Strike swap on odd runs or over end
+      final isEndOfOver = ballNumber==6;
+      final oddRun = batterRuns%2==1;
+      if (legalDelivery && !wicketFalls && (oddRun||isEndOfOver)) {
+        _swapStrike();
+      }
+
+      // 1️⃣4️⃣ Advance to next ball/over
+      if (legalDelivery) _advanceBall();
+
+      // 1️⃣5️⃣ Handle wicket replacement
+      if (wicketFalls) _showBatsmanSelectionAfterWicket();
+
+      // 1️⃣6️⃣ All out?
+      if (wickets>=10) {
+        _isScoringDisabled=true;
+        _showMatchEndDialog("All 10 wickets have fallen.");
+        return;
+      }
+
+      // 1️⃣7️⃣ Reset inputs
+      _isFreeHit=false;
+      selectedRuns=null;
+      selectedExtra=null;
+      isWicket=false;
+      wicketType=null;
+
+      // 1️⃣8️⃣ Update provider & refresh from API
+      Provider.of<MatchState>(context, listen: false).updateScore(
+        matchId: widget.matchId,
+        runs: runs, wickets: wickets,
+        over: overNumber, ball: ballNumber,
+      );
+      final refreshed = await _fetchCurrentScoreData();
+      if (refreshed!=null) {
+        _parseCurrentScore(refreshed, overridePlayers:false);
+        _checkMatchResult(refreshed);
+        setState((){});
+      }
+
     } finally {
-      _isSubmitting = false;
+      if (mounted) setState(() => _isSubmitting = false);
     }
   }
 
 
+  void _showMatchEndDialog(String message) {
+    showDialog(
+      context: context,
+      builder: (_) => AlertDialog(
+        title: const Text('🏁 Match Result'),
+        content: Text(message),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context),
+            child: const Text('OK'),
+          )
+        ],
+      ),
+    );
+  }
   void _advanceBall() {
-    if (ballNumber >= 6) {
+    // Only treat the 6th delivery as end‐of‐over
+    final isEndOfOver = ballNumber == 6;
+
+    if (isEndOfOver) {
+      // 1) Increment over count and reset ball
       overNumber++;
       ballNumber = 1;
 
-      if (overNumber > _matchOvers) {
-        _inningsOver = true; // ✅ Stop further submissions
-        _showMatchEndDialog("Innings Over - $_matchOvers Overs Completed");
-        return;
-      }
-
-
-      // ✅ Track overs bowled by last bowler
+      // 2) Track bowler’s completed over
       if (_lastBowlerId != null) {
-        _bowlerOversMap[_lastBowlerId!] = (_bowlerOversMap[_lastBowlerId!] ?? 0) + 1;
+        _bowlerOversMap[_lastBowlerId!] =
+            (_bowlerOversMap[_lastBowlerId!] ?? 0) + 1;
       }
-
       _lastBowlerId = bowlerId;
-      _swapStrike();
-      _showBowlerSelectionAfterOver();
+
+      // 3) Delay showing the bowler picker so the UI can repaint
+      Future.delayed(const Duration(milliseconds: 100), () {
+        _showBowlerSelectionAfterOver();
+      });
     } else {
+      // Simply move to the next ball within the same over
       ballNumber++;
     }
+
+    // Rebuild the header so overNumber/ballNumber update immediately
+    setState(() {});
   }
 
+  Future<String?> showPlayerChangeReasonDialog(BuildContext context) async {
+    final reasons = [
+      'Retired Hurt',
+      'Tactical Change',
+      'Injury Substitution',
+      'Out of form',
+      'Other',
+    ];
 
+    String? selectedReason;
+
+    return showDialog<String>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('Reason for Player Change'),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: reasons.map((reason) {
+            return RadioListTile<String>(
+              title: Text(reason),
+              value: reason,
+              groupValue: selectedReason,
+              onChanged: (value) {
+                selectedReason = value;
+                Navigator.of(context).pop(value); // Return selected
+              },
+            );
+          }).toList(),
+        ),
+      ),
+    );
+  }
   void _swapStrike() {
     final tmpId = onStrikePlayerId;
     final tmpName = onStrikeName;
@@ -1011,17 +1130,17 @@ class _AddScoreScreenState extends State<AddScoreScreen>
     setState(() {});
   }
 
-  void _resetInputs()
-  {
-    selectedRuns = null; // ✅ Fix: do not auto-select 0
-    selectedExtra = null;
-    isWicket = false;
+  void _resetInputs() {
+    resetScoringInputs(
+      setSelectedRuns: (v) => selectedRuns = v,
+      setSelectedExtra: (v) => selectedExtra = v,
+      setIsWicket: (v) => isWicket = v,
+    );
     wicketType = null;
   }
 
+
 /////Part4////
-
-
   void _showBowlerSelectionAfterOver() {
     WidgetsBinding.instance.addPostFrameCallback((_) {
       _showSelectPlayerSheet(isBatsman: false);
@@ -1075,15 +1194,21 @@ class _AddScoreScreenState extends State<AddScoreScreen>
       );
 
     // ✅ 3. Open bottom sheet to pick batsman
-    final newBatsmanName = await Future.delayed(const Duration(milliseconds: 150), () {
+    final int? newBatsmanId = await Future.delayed(const Duration(milliseconds: 150), () {
       return _showSelectPlayerSheet(
         isBatsman: true,
         selectForStriker: selectForStriker,
       );
     });
 
-    // ✅ 4. After selection, confirm with another snackbar
-    if (newBatsmanName != null && mounted) {
+    final String newBatsmanName = _battingSidePlayers
+        .firstWhere(
+          (p) => p['id'] == newBatsmanId,
+      orElse: () => {},
+    )['display_name'] ?? 'New Batsman';
+
+    // ✅ 4. Show confirmation
+    if (newBatsmanId != null && mounted) {
       ScaffoldMessenger.of(context)
         ..hideCurrentSnackBar()
         ..showSnackBar(
@@ -1096,95 +1221,188 @@ class _AddScoreScreenState extends State<AddScoreScreen>
   }
 
 
-
-
   void _showError(String msg) {
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(content: Text(msg), backgroundColor: Colors.red),
     );
   }
 
-  void _showMatchEndDialog(String message) {
-    showDialog(
-      context: context,
-      builder: (_) => AlertDialog(
-        title: const Text("Match Ended"),
-        content: Text(message),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(context),
-            child: const Text("OK"),
-          )
-        ],
-      ),
-    );
-  }
 
-  Future<String?> _showSelectPlayerSheet({
+
+
+  Future<int?> _showSelectPlayerSheet({
     required bool isBatsman,
-    bool? selectForStriker,
-  }) {
-    final source = isBatsman
-        ? _battingSidePlayers.where((p) => !_usedBatsmen.contains(p['id'])).toList()
-        : _bowlingSidePlayers.where((p) => !_usedBowlers.contains(p['id'])).toList();
+    bool? selectForStriker, // true = force striker, false = non-striker, null = ask
+  }) async {
+    final all  = isBatsman ? _battingSidePlayers : _bowlingSidePlayers;
+    final used = isBatsman ? _usedBatsmen : _usedBowlers;
 
-    if (source.isEmpty) {
+    // Filter out any already-used players (and dismissed batters)
+    final available = all.where((p) {
+      final id = p['id'] as int;
+      if (used.contains(id)) return false;
+      if (isBatsman && _dismissedBatters.contains(id)) return false;
+      return true;
+    }).toList();
+
+    if (available.isEmpty) {
       _showError("No more ${isBatsman ? "batsmen" : "bowlers"} available to select.");
-      return Future.value(null); // early return
+      return null;
     }
 
-    return showModalBottomSheet<String>(
+    return await showModalBottomSheet<int>(
       context: context,
       backgroundColor: Colors.transparent,
       builder: (_) => ClipRRect(
         borderRadius: const BorderRadius.vertical(top: Radius.circular(16)),
         child: Container(
           color: Theme.of(context).canvasColor,
-          height: 400,
+          height: 420,
           child: ListView.builder(
-            itemCount: source.length,
+            itemCount: available.length,
             itemBuilder: (_, i) {
-              final p = source[i];
-              final selectedId = p['id'] as int;
-              final selectedName = p['name'] as String;
+              final p            = available[i];
+              final selectedId   = p['id'] as int;
+              final selectedName = (p['name'] ?? p['display_name'] ?? p['user_login'] ?? 'Unnamed') as String;
 
-              return ListTile(
-                leading: CircleAvatar(child: Text(selectedName[0])),
-                title: Text(selectedName),
-                onTap: () {
-                  if (isBatsman) {
+              if (!isBatsman) {
+                // Bowler branch: show overs bowled / max overs for each bowler
+                final rawOvers    = _bowlerOversMap[selectedId] ?? 0.0;
+                final oversBowled = (rawOvers as num).toDouble();
+                final maxOvers    = _bowlerMaxOvers.toDouble();
+
+                return ListTile(
+                  leading: CircleAvatar(child: Text(selectedName[0])),
+                  title: Text(selectedName),
+                  subtitle: Text(
+                    '${oversBowled.toStringAsFixed(1)} / ${maxOvers.toStringAsFixed(1)} overs',
+                  ),
+                  onTap: () {
+                    // 1) Assign the new bowler
+                    bowlerId   = selectedId;
+                    bowlerName = selectedName;
+
+                    // 2) Refresh their stats from the parsed map
+                    final stats = _bowlerStatsMap[selectedId];
+                    if (stats != null) {
+                      bowlerRunsConceded = stats['runs']   as int;
+                      bowlerWickets      = stats['wickets']as int;
+                      bowlerMaidens      = stats['maiden'] as int;
+                      bowlerOversBowled  = stats['overs']  as String;
+                      bowlerEconomy      = stats['econ']   as double;
+                    }
+
+                    // 3) Mark used and rebuild UI
+                    _usedBowlers.add(selectedId);
+                    setState(() {});
+                    Navigator.pop(context, selectedId);
+                  },
+                );
+              } else {
+                // Batsman branch: unchanged existing logic
+                return ListTile(
+                  leading: CircleAvatar(child: Text(selectedName[0])),
+                  title: Text(selectedName),
+                  onTap: () async {
                     if (selectForStriker != null) {
+                      // Forced role
                       if (selectForStriker) {
                         if (selectedId == nonStrikePlayerId) {
                           _showError("Already selected as non-striker.");
                           return;
                         }
                         onStrikePlayerId = selectedId;
-                        onStrikeName = selectedName;
-                        onStrikeRuns = 0;
+                        onStrikeName     = selectedName;
+                        onStrikeRuns     = 0;
+                        onStrikeBalls    = 0;
                       } else {
                         if (selectedId == onStrikePlayerId) {
                           _showError("Already selected as striker.");
                           return;
                         }
                         nonStrikePlayerId = selectedId;
-                        nonStrikeName = selectedName;
-                        nonStrikeRuns = 0;
+                        nonStrikeName     = selectedName;
+                        nonStrikeRuns     = 0;
+                        nonStrikeBalls    = 0;
                       }
-                      Navigator.pop(context, selectedName); // ✅ return value
+                      _usedBatsmen.add(selectedId);
                       setState(() {});
+                      Navigator.pop(context, selectedId);
+
                     } else {
-                      _showBatsmanRoleDialog(p);
+                      // Ask role: on-strike or non-strike
+                      final role = await showDialog<String>(
+                        context: context,
+                        builder: (ctx) {
+                          String? picked;
+                          return StatefulBuilder(
+                            builder: (ctx, setSt) => AlertDialog(
+                              title: const Text("Select Batsman Role"),
+                              content: Column(
+                                mainAxisSize: MainAxisSize.min,
+                                children: [
+                                  RadioListTile<String>(
+                                    title: const Text("On Strike"),
+                                    value: "on",
+                                    groupValue: picked,
+                                    onChanged: (v) => setSt(() => picked = v),
+                                  ),
+                                  RadioListTile<String>(
+                                    title: const Text("Non Strike"),
+                                    value: "non",
+                                    groupValue: picked,
+                                    onChanged: (v) => setSt(() => picked = v),
+                                  ),
+                                ],
+                              ),
+                              actions: [
+                                TextButton(
+                                  onPressed: () => Navigator.pop(ctx),
+                                  child: const Text("Cancel"),
+                                ),
+                                ElevatedButton(
+                                  onPressed: () {
+                                    if (picked != null) Navigator.pop(ctx, picked);
+                                  },
+                                  child: const Text("Confirm"),
+                                ),
+                              ],
+                            ),
+                          );
+                        },
+                      );
+
+                      if (role == "on") {
+                        if (selectedId == nonStrikePlayerId) {
+                          _showError("Already selected as non-striker.");
+                          return;
+                        }
+                        onStrikePlayerId = selectedId;
+                        onStrikeName     = selectedName;
+                        onStrikeRuns     = 0;
+                        onStrikeBalls    = 0;
+
+                      } else if (role == "non") {
+                        if (selectedId == onStrikePlayerId) {
+                          _showError("Already selected as striker.");
+                          return;
+                        }
+                        nonStrikePlayerId = selectedId;
+                        nonStrikeName     = selectedName;
+                        nonStrikeRuns     = 0;
+                        nonStrikeBalls    = 0;
+
+                      } else {
+                        return; // user cancelled
+                      }
+
+                      _usedBatsmen.add(selectedId);
+                      setState(() {});
+                      Navigator.pop(context, selectedId);
                     }
-                  } else {
-                    // bowler selection
-                    bowlerId = selectedId;
-                    bowlerName = selectedName;
-                    Navigator.pop(context, selectedName); // ✅ return value
-                    setState(() {});
-                  }
-                },
-              );
+                  },
+                );
+              }
             },
           ),
         ),
@@ -1194,551 +1412,10 @@ class _AddScoreScreenState extends State<AddScoreScreen>
 
 
 
-
-  void _showBatsmanRoleDialog(Map<String, dynamic> player) {
-    String? role;
-    showDialog(
-      context: context,
-      builder: (_) => StatefulBuilder(builder: (ctx, setSt) {
-        return AlertDialog(
-          title: const Text("Select Batsman Role"),
-          content: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              RadioListTile<String>(
-                title: const Text("On Strike"),
-                value: "on",
-                groupValue: role,
-                onChanged: (v) => setSt(() => role = v),
-              ),
-              RadioListTile<String>(
-                title: const Text("Non Strike"),
-                value: "non",
-                groupValue: role,
-                onChanged: (v) => setSt(() => role = v),
-              ),
-            ],
-          ),
-
-
-          actions: [
-            TextButton(onPressed: () => Navigator.pop(ctx), child: const Text("Cancel")),
-            ElevatedButton(
-              onPressed: () {
-                final newId = player['id'] as int;
-                if (role == "on") {
-                  if (newId == nonStrikePlayerId) {
-                    _showError("Player already selected as non-striker.");
-                    return;
-                  }
-                  onStrikePlayerId = newId;
-                  onStrikeName = player['name'] as String;
-                } else {
-                  if (newId == onStrikePlayerId) {
-                    _showError("Player already selected as striker.");
-                    return;
-                  }
-                  nonStrikePlayerId = newId;
-                  nonStrikeName = player['name'] as String;
-                }
-                Navigator.pop(ctx);
-                Navigator.pop(context);
-                setState(() {});
-              },
-              child: const Text("Confirm"),
-            ),
-          ],
-        );
-      }),
-    );
-  }
-/////Part5
-
-  Widget _buildStatsHeader() {
-    final isLoading = matchName == null || (runs == 0 && wickets == 0 && overNumber == 0);
-
-    if (isLoading) {
-      return const Padding(
-        padding: EdgeInsets.symmetric(vertical: 24),
-        child: Column(
-          children: [
-            SizedBox(height: 12),
-            CircularProgressIndicator(),
-            SizedBox(height: 12),
-            Text('Loading score & match details...', style: TextStyle(color: Colors.grey)),
-            SizedBox(height: 16),
-          ],
-        ),
-      );
-    }
-
-    final isDark = Theme.of(context).brightness == Brightness.dark;
-    final bgColor = isDark ? Colors.white12 : Colors.white.withOpacity(0.1);
-    final borderColor = isDark ? Colors.white10 : Colors.white54;
-
-    return Container(
-      padding: const EdgeInsets.all(16),
-      margin: const EdgeInsets.symmetric(vertical: 8),
-      decoration: BoxDecoration(
-        color: bgColor,
-        borderRadius: BorderRadius.circular(20),
-        border: Border.all(color: borderColor, width: 0.6),
-        boxShadow: [
-          BoxShadow(
-            color: Colors.black12,
-            blurRadius: 10,
-            offset: const Offset(0, 4),
-          )
-        ],
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.center,
-        children: [
-          Text(
-            matchName ?? '',
-            style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
-          ),
-          const SizedBox(height: 4),
-          Text(teamName, style: const TextStyle(fontSize: 16)),
-          Text(
-            _firstInningClosed ? '2nd Innings' : '1st Innings',
-            style: TextStyle(color: isDark ? Colors.grey[400] : Colors.grey[600]),
-          ),
-          const SizedBox(height: 12),
-          Text(
-            '$runs - $wickets',
-            style: const TextStyle(
-              fontSize: 42,
-              fontWeight: FontWeight.bold,
-              color: Colors.teal,
-            ),
-          ),
-          const SizedBox(height: 4),
-          Text('Overs: $overNumber.$ballNumber',
-              style: TextStyle(color: isDark ? Colors.grey[300] : Colors.grey[800])),
-        ],
-      ),
-    );
-  }
-  Widget _buildPlayerTables() {
-    final isDark = Theme.of(context).brightness == Brightness.dark;
-    return Container(
-      width: double.infinity,
-      margin: const EdgeInsets.only(top: 12),
-      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-      decoration: BoxDecoration(
-        color: isDark ? Colors.white10 : Colors.white,
-        borderRadius: BorderRadius.circular(20),
-        boxShadow: [
-          if (!isDark)
-            BoxShadow(color: Colors.grey.withOpacity(0.1), blurRadius: 8, offset: const Offset(0, 4)),
-        ],
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          // 🏏 Batsmen Row
-          Row(
-            children: [
-              Expanded(
-                child: Row(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    const SizedBox(width: 8),
-                    Expanded(
-                      child: Row(
-                        mainAxisAlignment: MainAxisAlignment.spaceEvenly,
-                        children: [
-                          _batsmanColumn(
-                            label: "On Strike",
-                            name: onStrikeName,
-                            runs: onStrikeRuns,
-                            //    balls: onStrikeBalls,
-                            isStriker: true,
-                          ),
-                          _batsmanColumn(
-                            label: "Non Strike",
-                            name: nonStrikeName,
-                            runs: nonStrikeRuns,
-                            //   balls: nonStrikeBalls,
-                            isStriker: false,
-                          ),
-                        ],
-                      ),
-                    ),
-                  ],
-                ),
-
-
-              ),
-            ],
-          ),
-          const SizedBox(height: 12),
-
-          // 🎯 Bowler Info
-          Row(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              const Icon(Icons.sports_baseball, color: Colors.red),
-              const SizedBox(width: 8),
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Row(
-                      children: [
-                        //  const Text('Bowlers', style: TextStyle(fontWeight: FontWeight.bold)),
-                        const SizedBox(width: 8),
-                        Expanded(
-                          child: Text(
-                            bowlerName ?? '-',
-                            style: const TextStyle(fontSize: 15, fontWeight: FontWeight.w600),
-                            overflow: TextOverflow.ellipsis,
-                          ),
-                        ),
-                        InkWell(
-                          onTap: () async {
-                            if (ballNumber != 1) {
-                              final reason = await _showChangeReasonDialog("bowler");
-                              if (reason == null || reason.trim().isEmpty) {
-                                _showError("Bowler change canceled.");
-                                return;
-                              }
-                            }
-                            _showSelectPlayerSheet(isBatsman: false);
-                          },
-                          child: const Padding(
-                            padding: EdgeInsets.all(4),
-                            child: Icon(Icons.edit, size: 16, color: Colors.grey),
-                          ),
-                        ),
-                      ],
-                    ),
-
-                    const SizedBox(height: 4),
-
-                    // Text(bowlerName ?? '-', style: const TextStyle(fontSize: 15, fontWeight: FontWeight.w600)),
-                    const SizedBox(height: 6),
-
-                    Wrap(
-                      spacing: 16,
-                      runSpacing: 6,
-                      children: [
-                        _statTile("Overs", bowlerOversBowled),
-                        _statTile("Maidens", "$bowlerMaidens"),
-                        _statTile("Runs", "$bowlerRunsConceded"),
-                        _statTile("Wickets", "$bowlerWickets"),
-                        _statTile("Economy", bowlerEconomy.toStringAsFixed(2)),
-                        _statTile("Extras", "$totalExtras"),
-                        _statTile("Run Rate", currentRunRate.toStringAsFixed(2)),
-                      ],
-                    ),
-
-                    const SizedBox(height: 12),
-                  ],
-                ),
-              ),
-            ],
-          ),
-
-        ],
-      ),
-    );
-  }
-
-  Widget _statTile(String label, String value) {
-    return Column(
-      mainAxisSize: MainAxisSize.min,
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Text(label, style: const TextStyle(fontSize: 12, color: Colors.grey)),
-        const SizedBox(height: 2),
-        Text(value, style: const TextStyle(fontSize: 14, fontWeight: FontWeight.bold)),
-      ],
-    );
-  }
-
-
-  Widget _batsmanColumn({
-    required String label,
-    String? name,
-    required int runs,
-    int balls = 0,
-    bool isStriker = false,
-  }) {
-    final strikeRate = (balls > 0) ? ((runs / balls) * 100).toStringAsFixed(1) : '-';
-    final isDark = Theme.of(context).brightness == Brightness.dark;
-
-    return Container(
-      padding: const EdgeInsets.all(8),
-      decoration: isStriker
-          ? BoxDecoration(
-        color: Colors.teal.withOpacity(0.05),
-        borderRadius: BorderRadius.circular(10),
-        border: Border.all(color: Colors.teal.shade200, width: 1),
-      )
-          : null,
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.center,
-        children: [
-          Text(
-            label,
-            style: const TextStyle(
-              fontSize: 12,
-              fontWeight: FontWeight.bold,
-              color: Colors.grey,
-            ),
-          ),
-          const SizedBox(height: 4),
-
-          // 🏏 Name + ✏️ Edit icon
-          Row(
-            mainAxisAlignment: MainAxisAlignment.center,
-            children: [
-              if (isStriker) const Text('🏏', style: TextStyle(fontSize: 16)),
-              const SizedBox(width: 4),
-              Text(
-                name ?? '-',
-                style: const TextStyle(
-                  fontSize: 16,
-                  fontWeight: FontWeight.w600,
-                ),
-              ),
-              const SizedBox(width: 4),
-              InkWell(
-                onTap: () async {
-                  if (ballNumber != 1) {
-                    final reason = await _showChangeReasonDialog("batsman");
-                    if (reason == null || reason.trim().isEmpty) {
-                      _showError("Batsman change canceled.");
-                      return;
-                    }
-                  }
-                  _showSelectPlayerSheet(isBatsman: true, selectForStriker: isStriker);
-                },
-                child: const Icon(Icons.edit, size: 16, color: Colors.grey),
-              ),
-            ],
-          ),
-
-          const SizedBox(height: 4),
-          Text('$runs Runs', style: const TextStyle(fontSize: 13)),
-        ],
-      ),
-    );
-  }
-
-
-  Widget _buildScoringInputs() {
-    final isDark = Theme.of(context).brightness == Brightness.dark;
-
-    return Container(
-      padding: const EdgeInsets.all(16),
-      margin: const EdgeInsets.symmetric(vertical: 12),
-      decoration: BoxDecoration(
-        color: isDark ? Colors.white10 : Colors.white,
-        borderRadius: BorderRadius.circular(20),
-        boxShadow: [
-          if (!isDark)
-            BoxShadow(
-              color: Colors.grey.withOpacity(0.2),
-              blurRadius: 8,
-              offset: const Offset(0, 4),
-            ),
-        ],
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          const Text('Runs', style: TextStyle(fontWeight: FontWeight.bold)),
-          const SizedBox(height: 8),
-          Wrap(
-            spacing: 8,
-            children: [0, 1, 2, 3, 4, 6].map((r) {
-              return ChoiceChip(
-                label: Text('$r'),
-                selected: selectedRuns == r,
-                selectedColor: isDark ? Colors.tealAccent.shade400 : Colors.teal,
-                onSelected: _isSubmitting
-                    ? null
-                    : (_) {
-                  setState(() => selectedRuns = r);
-                  _submitScore(); // Normal run submission
-                },
-                labelStyle: TextStyle(
-                  color: isDark ? Colors.white : Colors.black,
-                ),
-              );
-            }).toList(),
-          ),
-
-          const SizedBox(height: 20),
-          const Text('Extras', style: TextStyle(fontWeight: FontWeight.bold)),
-          const SizedBox(height: 8),
-          Wrap(
-            spacing: 8,
-            children: ['Wide', 'No Ball', 'Bye', 'Leg Bye'].map((e) {
-              return ChoiceChip(
-                label: Text(e),
-                selected: selectedExtra == e,
-                selectedColor: Colors.orange.shade700,
-                onSelected: (_) async {
-                  final run = await _showExtraRunDialog(e, e);
-                  if (run != null) {
-                    setState(() {
-                      selectedExtra = e;
-                      selectedRuns = run;
-                    });
-                    _submitScore();
-                  }
-                },
-                labelStyle: TextStyle(
-                  color: isDark ? Colors.white : Colors.black,
-                ),
-              );
-            }).toList(),
-          ),
-
-          const SizedBox(height: 20),
-
-          // Wicket Checkbox + Buttons Row
-          Row(
-            crossAxisAlignment: CrossAxisAlignment.center,
-            children: [
-              Checkbox(
-                value: isWicket,
-                onChanged: (v) async {
-                  print('🔔 Checkbox changed → $v');
-
-                  if (v == true) {
-                    final result = await _showWicketTypeDialog();
-
-                    if (result != null) {
-                      setState(() {
-                        isWicket = true;
-                        wicketType = result['type']; // ✅ real string like "Caught"
-                        selectedRuns = result['runs'] ?? 0;
-                      });
-
-                      print('✅ Submitting wicket with → type: $wicketType, runs: $selectedRuns');
-                      await _submitScore(); // ✅ submit after selection
-                    } else {
-                      setState(() {
-                        isWicket = false;
-                        wicketType = null;
-                      });
-                    }
-                  } else {
-                    setState(() {
-                      isWicket = false;
-                      wicketType = null;
-                    });
-                  }
-                },
-                activeColor: Colors.redAccent,
-              ),
-              const Text('Wicket', style: TextStyle(fontWeight: FontWeight.w500)),
-              const Spacer(),
-
-              // Swap Button
-              TextButton.icon(
-                onPressed: () {
-                  _swapStrike();
-                  ScaffoldMessenger.of(context).showSnackBar(
-                    const SnackBar(content: Text('Striker and non-striker swapped!')),
-                  );
-                },
-                icon: const Icon(Icons.swap_horiz, size: 16),
-                label: const Text('Swap'),
-                style: TextButton.styleFrom(
-                  backgroundColor: Colors.blue.shade50,
-                  foregroundColor: Colors.blue,
-                  padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-                  shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(10),
-                  ),
-                ),
-              ),
-
-              const SizedBox(width: 8),
-
-              // Undo Button
-              TextButton.icon(
-                onPressed: _undoLastBall,
-                icon: const Icon(Icons.undo, size: 16),
-                label: const Text('Undo'),
-                style: TextButton.styleFrom(
-                  backgroundColor: Colors.red.shade50,
-                  foregroundColor: Colors.red,
-                  padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-                  shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(10),
-                  ),
-                ),
-              ),
-            ],
-          ),
-        ],
-      ),
-    );
-  }
-
-
-/////part7
-
-  Widget _buildGlassyButton({
-    required String label,
-    required IconData icon,
-    required VoidCallback onTap,
-  }) {
-    final isDark = Theme.of(context).brightness == Brightness.dark;
-    final bgColor = isDark ? Colors.white12 : AppColors.primary;
-    final borderColor = isDark ? Colors.white24 : AppColors.primary;
-    final shadowColor =
-    isDark ? Colors.white12 : AppColors.primary.withOpacity(0.4);
-
-    return GestureDetector(
-      onTap: onTap,
-      child: ClipRRect(
-        borderRadius: BorderRadius.circular(16),
-        child: BackdropFilter(
-          filter: ImageFilter.blur(sigmaX: 8, sigmaY: 8),
-          child: Container(
-            padding: const EdgeInsets.symmetric(vertical: 14),
-            decoration: BoxDecoration(
-              color: bgColor,
-              border: Border.all(color: borderColor),
-              borderRadius: BorderRadius.circular(16),
-              boxShadow: [
-                BoxShadow(
-                  color: shadowColor,
-                  blurRadius: 12,
-                  offset: const Offset(0, 4),
-                ),
-              ],
-            ),
-            child: Row(
-              mainAxisAlignment: MainAxisAlignment.center,
-              children: [
-                Icon(icon, color: Colors.white),
-                const SizedBox(width: 8),
-                Text(
-                  label,
-                  style: const TextStyle(
-                      color: Colors.white, fontWeight: FontWeight.bold),
-                ),
-              ],
-            ),
-          ),
-        ),
-      ),
-    );
-  }
-
-
   @override
   Widget build(BuildContext context) {
     final isDark = Theme.of(context).brightness == Brightness.dark;
+
     return Scaffold(
       appBar: PreferredSize(
         preferredSize: const Size.fromHeight(60),
@@ -1746,8 +1423,7 @@ class _AddScoreScreenState extends State<AddScoreScreen>
           decoration: isDark
               ? const BoxDecoration(
             color: Color(0xFF1E1E1E),
-            borderRadius:
-            BorderRadius.vertical(bottom: Radius.circular(20)),
+            borderRadius: BorderRadius.vertical(bottom: Radius.circular(20)),
           )
               : const BoxDecoration(
             gradient: LinearGradient(
@@ -1755,26 +1431,25 @@ class _AddScoreScreenState extends State<AddScoreScreen>
               begin: Alignment.topLeft,
               end: Alignment.bottomRight,
             ),
-            borderRadius:
-            BorderRadius.vertical(bottom: Radius.circular(20)),
+            borderRadius: BorderRadius.vertical(bottom: Radius.circular(20)),
           ),
           child: AppBar(
             backgroundColor: Colors.transparent,
             elevation: 0,
             centerTitle: true,
-            title: Text(
+            title: const Text(
               'Match Score',
-              style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold),
+              style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold),
             ),
-
           ),
         ),
       ),
-      body: SingleChildScrollView(
-          padding: const EdgeInsets.all(16),
+      body: SafeArea(
+        child: Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
           child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              const SizedBox(height: 16),
               AnimatedScoreCard(
                 matchType: matchName ?? 'Match',
                 teamName: teamName,
@@ -1783,13 +1458,114 @@ class _AddScoreScreenState extends State<AddScoreScreen>
                 wickets: wickets,
                 overs: overNumber,
                 balls: ballNumber,
+                totalOvers: _matchOvers,
+                targetScore: _firstInningClosed ? _firstInningScore : null,
               ),
 
-              const SizedBox(height: 20),
-              _buildPlayerTables(),
-              _buildScoringInputs(),
+              PlayerStatsCard(
+                onStrikeName: onStrikeName,
+                onStrikeRuns: onStrikeRuns,
+                nonStrikeName: nonStrikeName,
+                nonStrikeRuns: nonStrikeRuns,
+                bowlerName: bowlerName,
+                bowlerOvers: bowlerOversBowled,
+                maidens: bowlerMaidens,
+                runsConceded: bowlerRunsConceded,
+                wickets: bowlerWickets,
+                economy: bowlerEconomy,
+                extras: totalExtras,
+                runRate: currentRunRate,
+                onEditBatsman: () => _showSelectPlayerSheet(isBatsman: true, selectForStriker: true),
+                onEditNonBatsman: () => _showSelectPlayerSheet(isBatsman: true, selectForStriker: false),
+                onEditBowler: () => _showSelectPlayerSheet(isBatsman: false),
+                compact: true,
+              ),
+
+              const SizedBox(height: 4),
+
+              (_teamOneId == null || _teamTwoId == null)
+                  ? const Center(child: CircularProgressIndicator())
+                  : LastSixBallsWidget(
+                matchId: widget.matchId,
+                teamId: _firstInningClosed ? _teamTwoId! : _teamOneId!,
+                refresher: _lastSixBallsRefresher,
+                autoRefreshEvery: const Duration(seconds: 20),
+              ),
+
+
+              const SizedBox(height: 4),
+
+              // Make this area scrollable & avoid overflows
+              ScoringInputs(
+                selectedRuns: selectedRuns,
+                selectedExtra: selectedExtra,
+                isWicket: isWicket,
+                isSubmitting: _isSubmitting,
+
+                onRunSelected: (r) async {
+                  setState(() => selectedRuns = r);
+                  await _submitScore();
+                  setState(() => _resetInputs()); // ✅ Reset inputs after scoring
+                },
+
+
+                onExtraSelected: (type) async {
+                  final run = await showExtraRunDialog(context, type, type);
+                  if (run != null) {
+                    setState(() {
+                      selectedExtra = type;
+                      selectedRuns = run;
+                    });
+                    await _submitScore();
+                    setState(() => _resetInputs()); // ✅ Reset inputs
+                  }
+                },
+
+
+                onWicketSelected: () async {
+                  final res = await WicketTypeDialog.show(context);
+                  if (res != null) {
+                    setState(() {
+                      isWicket = true;
+                      wicketType = res['type'];
+                      selectedRuns = res['runs'] ?? 0;
+                    });
+                    await _submitScore();
+                    setState(() => _resetInputs()); // ✅ Reset inputs
+                  }
+                },
+
+
+                onSwapStrike: _swapStrike, // ✅ Added
+                onUndo: _undoLastBall,     // ✅ Added
+                onEndInning: _handleEndInning, // ✅ Added
+
+                onEndMatch: () async {
+                  await showEndMatchDialog(
+                    context: context,
+                    matchId: widget.matchId,
+                    token: widget.token,
+                    teams: [
+                      {'team_id': 1, 'team_name': 'CJ SQUAD'},
+                      {'team_id': 2, 'team_name': 'Opponent Team'},
+                    ],
+                  );
+
+                },
+
+                onViewMatch: () {
+                  Navigator.push(
+                    context,
+                    MaterialPageRoute(
+                      builder: (_) => FullMatchDetail(matchId: widget.matchId),
+                    ),
+                  );
+                },
+              ),
+
             ],
-          )
+          ),
+        ),
       ),
     );
   }

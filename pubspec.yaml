@@ -18,6 +18,7 @@ dependencies:
   flutter_staggered_animations: ^1.1.1
   flip_card: ^0.7.0
   smooth_page_indicator: ^1.1.0
+  google_fonts: ^6.1.0
 
   # Core
   http: ^1.4.0
@@ -66,6 +67,7 @@ flutter:
     - lib/asset/images/cricjust_logo.png
     - lib/asset/images/Random_Image.png
     - lib/asset/images/Theme1.png
+    - lib/asset/images/tv_bg.png # ✅ Add your new stadium background image here
 
 flutter_launcher_icons:
   android: true

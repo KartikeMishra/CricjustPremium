@@ -9,15 +9,15 @@ import '../model/offline_score_model.dart';
 import '../theme/color.dart';
 import 'package:connectivity_plus/connectivity_plus.dart';
 
-class AddScoreScreen extends StatefulWidget {
+class offlineAddScoreScreens extends StatefulWidget {
   final int matchId;
-  const AddScoreScreen({super.key, required this.matchId});
+  const offlineAddScoreScreens({super.key, required this.matchId});
 
   @override
-  State<AddScoreScreen> createState() => _AddScoreScreenState();
+  State<offlineAddScoreScreens> createState() => _AddScoreScreenState();
 }
 
-class _AddScoreScreenState extends State<AddScoreScreen> {
+class _AddScoreScreenState extends State<offlineAddScoreScreens> {
   int? onStrikePlayerId = 1;
   int? nonStrikePlayerId = 2;
   int? bowlerId = 3;
