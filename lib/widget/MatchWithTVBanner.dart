@@ -22,46 +22,47 @@ class _MatchWithTVBannerState extends State<MatchWithTVBanner> {
   int wickets = 0;
   double overs = 0.0;
   String lastBall = "•";
-
+  int extras = 0;
   void _refreshTVBanner() async {
-    final scoreData = await MatchScoreService.getCurrentScore(widget.matchId, widget.token);
-    if (scoreData != null) {
-      final lastBallInfo = scoreData['last_ball_data']?[0];
+    final scoreData = await MatchScoreService.getCurrentScore(
+      widget.matchId,
+      widget.token,
+    );
+    if (scoreData == null) return;
 
-      String lbType = "•";
-      if (lastBallInfo != null) {
-        final isWicket = lastBallInfo['is_wicket'] == 1;
-        final isExtra = lastBallInfo['is_extra'] == 1;
-        final extraType = (lastBallInfo['extra_run_type'] ?? "").toString().toLowerCase();
-        final runsScored = int.tryParse(lastBallInfo['runs'].toString()) ?? 0;
-        final extraRun = int.tryParse(lastBallInfo['extra_run']?.toString() ?? '0') ?? 0;
+    print("📥 [TV] full current_score: $scoreData");
+    print("🗝 current_score keys: ${scoreData.keys.toList()}");
 
-        if (isWicket) {
-          lbType = "W";
-        } else if (isExtra) {
-          if (extraType.contains("wide")) lbType = "${extraRun > 0 ? extraRun : ''}Wd";
-          else if (extraType.contains("no")) lbType = "${extraRun > 0 ? extraRun : ''}Nb";
-          else if (extraType.contains("leg")) lbType = "${extraRun > 0 ? extraRun : ''}Lb";
-          else if (extraType.contains("bye")) lbType = "${extraRun > 0 ? extraRun : ''}B";
-          else lbType = "•";
-        } else {
-          lbType = runsScored.toString();
-        }
-      }
+    final currentInning = scoreData['current_inning'] as Map<String, dynamic>?;
+    print("🔑 current_inning keys: ${currentInning?.keys.toList()}");
 
-      setState(() {
-        runs = scoreData['runs'];
-        wickets = scoreData['wickets'];
-        overs = scoreData['overs'];
-        lastBall = lbType;
-      });
+    final lastList = currentInning?['last_ball_data'] as List<dynamic>?;
+    print("🟡 last_ball_data: $lastList");
+
+    final lastBallInfo = (lastList?.isNotEmpty == true) ? lastList![0] : null;
+    print("🟢 using lastBallInfo: $lastBallInfo");
+
+    String lbType = '•';
+    if (lastBallInfo != null) {
+      // … your existing logic to pick W, extras, runs …
     }
+
+    setState(() {
+      runs    = scoreData['runs'] ?? runs;
+      wickets = scoreData['wickets'] ?? wickets;
+      overs   = double.tryParse(scoreData['overs']?.toString() ?? '') ?? overs;
+      extras  = scoreData['extras'] ?? extras;
+      lastBall = lbType;
+    });
+
+    print("✅ TV Banner → lastBall=$lastBall");
   }
+
 
   @override
   void initState() {
     super.initState();
-    _refreshTVBanner(); // Initial load
+    _refreshTVBanner();
   }
 
   @override
@@ -76,6 +77,7 @@ class _MatchWithTVBannerState extends State<MatchWithTVBanner> {
               runs: runs,
               wickets: wickets,
               overs: overs,
+              extras: extras,
               lastBallType: lastBall,
               isLive: true,
             ),

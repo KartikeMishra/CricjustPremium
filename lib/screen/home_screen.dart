@@ -72,13 +72,25 @@ class _HomeScreenState extends State<HomeScreen> {
               _userEmail = data['user_email'] ?? _userEmail;
               _profilePicUrl = extra['user_profile_image'];
             });
+
+            // ✅ ALSO update SharedPreferences (optional but recommended)
+            await prefs.setString('userName', _userName);
+            await prefs.setString('userEmail', _userEmail);
+            if (_profilePicUrl != null) {
+              await prefs.setString('profilePic', _profilePicUrl!);
+            }
           }
         }
       } catch (_) {}
     }
 
-    _userName = prefs.getString('userName') ?? _userName;
-    _userEmail = prefs.getString('userEmail') ?? _userEmail;
+// ✅ Always re-assign from prefs in case API fails
+    setState(() {
+      _userName = prefs.getString('userName') ?? _userName;
+      _userEmail = prefs.getString('userEmail') ?? _userEmail;
+      _profilePicUrl = prefs.getString('profilePic') ?? _profilePicUrl;
+    });
+
   }
 
   void _onItemTapped(int index) {

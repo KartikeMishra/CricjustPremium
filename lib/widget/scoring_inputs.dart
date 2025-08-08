@@ -12,7 +12,7 @@ class ScoringInputs extends StatelessWidget {
   final VoidCallback onUndo;
   final VoidCallback onEndInning;
   final VoidCallback onEndMatch;
-  final VoidCallback? onViewMatch; // ✅ New
+  final VoidCallback? onViewMatch;
   final Future<Map<String, dynamic>?> Function()? onChangeWicketKeeper;
 
   const ScoringInputs({
@@ -29,7 +29,7 @@ class ScoringInputs extends StatelessWidget {
     required this.onEndInning,
     required this.onEndMatch,
     this.onChangeWicketKeeper,
-    this.onViewMatch, // ✅ New
+    this.onViewMatch,
   });
 
   @override
@@ -52,21 +52,83 @@ class ScoringInputs extends StatelessWidget {
       );
     }
 
-    Widget extraChip(String label, String shown) {
-      final selected = selectedExtra == label;
+    Widget customRunChip(BuildContext context) {
       return ChoiceChip(
-        label: Text(shown),
-        selected: selected,
-        onSelected: (_) => onExtraSelected(label),
-        selectedColor: Colors.blue,
+        label: const Text('+'),
+        selected: false,
+        onSelected: (_) async {
+          final controller = TextEditingController();
+          final result = await showDialog<int>(
+            context: context,
+            builder: (ctx) => AlertDialog(
+              title: const Text("Enter Custom Runs"),
+              content: TextField(
+                controller: controller,
+                keyboardType: TextInputType.number,
+                decoration: const InputDecoration(hintText: 'Enter runs'),
+              ),
+              actions: [
+                TextButton(onPressed: () => Navigator.pop(ctx), child: const Text("Cancel")),
+                TextButton(
+                  onPressed: () {
+                    final val = int.tryParse(controller.text.trim());
+                    if (val != null) Navigator.pop(ctx, val);
+                  },
+                  child: const Text("OK"),
+                ),
+              ],
+            ),
+          );
+          if (result != null) onRunSelected(result);
+        },
         backgroundColor: isDark ? Colors.grey[800] : Colors.grey[200],
+      );
+    }
+    Color _extraColor(String type, bool selected, bool isDark) {
+      // pick base color by extra type
+      final base = () {
+        switch (type) {
+          case 'Wide':    return Colors.green;
+          case 'No Ball': return Colors.orange;
+          case 'Leg Bye': return Colors.blueGrey;
+          case 'Bye':     return Colors.purple;
+          default:        return Colors.grey;
+        }
+      }();
+
+      // lighten when not selected, or dark theme
+      return selected
+          ? base
+          : (isDark ? base.withOpacity(0.4) : base.withOpacity(0.2));
+    }
+
+    Widget extraChip(String value, String shown) {
+      final selected = selectedExtra == value;
+      final color = _extraColor(value, selected, isDark);
+
+      return ChoiceChip(
+        label: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Text(shown.toUpperCase()),
+            if (selected) ...[
+              const SizedBox(width: 4),
+              const Icon(Icons.check, size: 14, color: Colors.white),
+            ]
+          ],
+        ),
+        selected: selected,
+        onSelected: (_) => onExtraSelected(value),
+        backgroundColor: color,
+        selectedColor: color,
         labelStyle: TextStyle(
-          color: selected ? Colors.white : (isDark ? Colors.white : Colors.black),
+          color: selected ? Colors.white : (isDark ? Colors.white70 : Colors.black87),
           fontWeight: FontWeight.w600,
         ),
         padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
       );
     }
+
 
     return SingleChildScrollView(
       padding: const EdgeInsets.only(bottom: 8),
@@ -76,10 +138,20 @@ class ScoringInputs extends StatelessWidget {
           const SizedBox(height: 6),
           const Text('Select Runs', style: TextStyle(fontWeight: FontWeight.bold)),
           const SizedBox(height: 6),
-          Wrap(
-            spacing: 8,
-            runSpacing: 8,
-            children: [0, 1, 2, 3, 4, 5, 6].map(runChip).toList(),
+          SingleChildScrollView(
+            scrollDirection: Axis.horizontal,
+            child: Row(
+              children: [
+                ...[0, 1, 2, 3, 4, 5, 6].map((r) => Padding(
+                  padding: const EdgeInsets.only(right: 8),
+                  child: runChip(r),
+                )),
+                Padding(
+                  padding: const EdgeInsets.only(right: 8),
+                  child: customRunChip(context),
+                ),
+              ],
+            ),
           ),
 
           const SizedBox(height: 14),
@@ -103,14 +175,28 @@ class ScoringInputs extends StatelessWidget {
             spacing: 10,
             runSpacing: 10,
             children: [
-              _action('Wicket', Icons.warning_amber, Colors.redAccent, onWicketSelected),
-              _action('Swap Strike', Icons.swap_horiz, Colors.teal, onSwapStrike),
-              _action('Undo', Icons.undo, Colors.orange, onUndo),
+              _glassyButton(
+                label: 'Wicket',
+                icon: Icons.warning_amber,
+                color: Colors.redAccent,
+                onPressed: isSubmitting ? null : onWicketSelected,
+              ),
+              _glassyButton(
+                label: 'Swap Strike',
+                icon: Icons.swap_horiz,
+                color: Colors.teal,
+                onPressed: isSubmitting ? null : onSwapStrike,
+              ),
+              _glassyButton(
+                label: 'Undo',
+                icon: Icons.undo,
+                color: Colors.orange,
+                onPressed: isSubmitting ? null : onUndo,
+              ),
             ],
           ),
 
           const SizedBox(height: 12),
-
           if (onChangeWicketKeeper != null)
             ElevatedButton.icon(
               icon: const Icon(Icons.switch_account),
@@ -134,15 +220,29 @@ class ScoringInputs extends StatelessWidget {
             ),
 
           const SizedBox(height: 12),
-
           Wrap(
             spacing: 10,
             runSpacing: 10,
             children: [
-              _pill('End Inning', Icons.flag, Colors.blueGrey, onEndInning),
-              _pill('End Match', Icons.emoji_events, Colors.deepPurple, onEndMatch),
+              _glassyButton(
+                label: 'End Inning',
+                icon: Icons.flag,
+                color: Colors.blueGrey,
+                onPressed: isSubmitting ? null : onEndInning,
+              ),
+              _glassyButton(
+                label: 'End Match',
+                icon: Icons.emoji_events,
+                color: Colors.deepPurple,
+                onPressed: isSubmitting ? null : onEndMatch,
+              ),
               if (onViewMatch != null)
-                _pill('View Match', Icons.visibility, Colors.indigo, onViewMatch!), // ✅ NEW
+                _glassyButton(
+                  label: 'View Match',
+                  icon: Icons.visibility,
+                  color: Colors.indigo,
+                  onPressed: isSubmitting ? null : onViewMatch!,
+                ),
             ],
           ),
         ],
@@ -150,31 +250,38 @@ class ScoringInputs extends StatelessWidget {
     );
   }
 
-  Widget _action(String text, IconData icon, Color color, VoidCallback onTap) {
-    return ElevatedButton.icon(
-      onPressed: isSubmitting ? null : onTap,
-      icon: Icon(icon, size: 18),
-      label: Text(text),
-      style: ElevatedButton.styleFrom(
-        backgroundColor: color,
-        foregroundColor: Colors.white,
-        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
-      ),
-    );
-  }
+  Widget _glassyButton({
+    required String label,
+    required IconData icon,
+    required Color color,
+    required VoidCallback? onPressed,
+    bool isLoading = false,
+  }) {
+    final isEnabled = onPressed != null;
 
-  Widget _pill(String text, IconData icon, Color color, VoidCallback onTap) {
     return ElevatedButton.icon(
-      onPressed: isSubmitting ? null : onTap,
-      icon: Icon(icon, size: 18),
-      label: Text(text),
+      icon: isLoading
+          ? SizedBox(
+        width: 18,
+        height: 18,
+        child: CircularProgressIndicator(strokeWidth: 2, color: color),
+      )
+          : Icon(icon, size: 18),
+      label: Text(label),
+      onPressed: onPressed,
       style: ElevatedButton.styleFrom(
-        backgroundColor: color.withOpacity(.15),
-        foregroundColor: color,
-        side: BorderSide(color: color.withOpacity(.4)),
+        backgroundColor: isEnabled ? color.withOpacity(0.15) : Colors.grey.shade200,
+        foregroundColor: isEnabled ? color : Colors.grey,
+        elevation: isEnabled ? 2 : 0,
+        shadowColor: isEnabled ? color.withOpacity(0.25) : Colors.transparent,
         padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+        side: BorderSide(
+          color: isEnabled ? color.withOpacity(0.3) : Colors.grey.shade300,
+          width: 1.0,
+        ),
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(20),
+        ),
       ),
     );
   }

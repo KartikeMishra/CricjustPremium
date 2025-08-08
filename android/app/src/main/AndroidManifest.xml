@@ -1,5 +1,6 @@
 <manifest xmlns:android="http://schemas.android.com/apk/res/android"
     package="com.example.cricjust_premium">
+    <uses-permission android:name="android.permission.INTERNET" />
 
     <!-- 📌 Add required permissions here -->
     <uses-permission android:name="android.permission.READ_EXTERNAL_STORAGE"/>

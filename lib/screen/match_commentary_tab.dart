@@ -1,3 +1,5 @@
+import 'dart:math';
+
 import 'package:flutter/material.dart';
 import 'package:shimmer/shimmer.dart';
 import '../model/match_commentary_model.dart';
@@ -122,6 +124,7 @@ class _CommentaryListState extends State<_CommentaryList> {
   @override
   void initState() {
     super.initState();
+    print('📋 Commentary for Match ID: ${widget.matchId}, Team ID: ${widget.teamId}');
     _ctr.addListener(_onScroll);
     _loadMore();
   }
@@ -204,7 +207,7 @@ class _CommentaryListState extends State<_CommentaryList> {
       g.balls.sort((a, b) {
         final aN = int.tryParse(a['ball_number'].toString()) ?? 0;
         final bN = int.tryParse(b['ball_number'].toString()) ?? 0;
-        return aN.compareTo(bN);
+        return bN.compareTo(aN); // 👈 reverse order: 6 → 1
       });
     }
 
@@ -300,17 +303,22 @@ class OverCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+
     final badges = group.balls.map((e) {
-      final text = (e['commentry'] ?? '').toString().toLowerCase();
-      if (text.contains('4 runs')) return '4';
-      if (text.contains('6 runs')) return '6';
-      if (text.contains('wide')) return 'wd';
-      if (text.contains('no ball')) return 'nb';
-      if (text.contains('bye')) return 'b';
-      if (text.contains('wicket') || text.contains('caught')) return 'w';
-      final m = RegExp(r'(\d+)\s+runs?').firstMatch(text);
+      final raw = (e['commentry'] ?? '').toString();
+      final plainText = raw.replaceAll(RegExp(r'<[^>]*>'), '').toLowerCase();
+
+      if (plainText.contains('wide')) return 'wd';
+      if (plainText.contains('no ball')) return 'nb';
+      if (plainText.contains('bye')) return 'b';
+      if (plainText.contains('wicket') || plainText.contains('caught') || plainText.contains('run out')) return 'w';
+      if (plainText.contains('6 run')) return '6';
+      if (plainText.contains('4 run')) return '4';
+
+      final m = RegExp(r'(\d+)\s+runs?').firstMatch(plainText);
       return m != null ? m.group(1)! : '0';
     }).toList();
+
 
     final runs = badges.fold<int>(0, (s, b) => s + (int.tryParse(b) ?? 0));
     final wkts = badges.where((b) => b == 'w').length;

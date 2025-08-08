@@ -1,23 +1,24 @@
 // lib/service/match_score_service.dart
 
 import 'dart:convert';
-import 'package:flutter/material.dart';
+import 'package:flutter/foundation.dart';            // for debugPrint
+import 'package:shared_preferences/shared_preferences.dart';
 import 'package:http/http.dart' as http;
+import 'package:flutter/material.dart';
+
 import '../model/match_score_model.dart';
 import '../api/api_helper.dart';
 
 class MatchScoreService {
+  static const String _baseUrl = 'https://cricjust.in/wp-json/custom-api-for-cricket';
+
   /// Submit a single ball’s score
   static Future<bool> submitScore(
       MatchScoreRequest req,
       String token,
       BuildContext context,
       ) async {
-    final uri = Uri.parse(
-      'https://cricjust.in/wp-json/custom-api-for-cricket/save-cricket-match-score'
-          '?api_logged_in_token=$token',
-    );
-
+    final uri = Uri.parse('$_baseUrl/save-cricket-match-score?api_logged_in_token=$token');
     final body = <String, String>{
       'match_id': req.matchId.toString(),
       'batting_team_id': req.battingTeamId.toString(),
@@ -34,25 +35,16 @@ class MatchScoreService {
       if (req.isWicket != null) 'is_wicket': req.isWicket!.toString(),
       if (req.wicketType != null) 'wicket_type': req.wicketType!,
       if (req.commentry != null) 'commentry': req.commentry!,
+      if (req.wktkprId != null) 'wktkpr_id': req.wktkprId!.toString(),
     };
-
-    print('📤 [API] save-cricket-match-score payload: ${jsonEncode(body)}');
 
     final res = await ApiHelper.safeRequest(
       context: context,
       requestFn: () => http.post(uri, body: body),
     );
-    if (res == null) return false;
-
-    print('📥 [API] Response: ${res.statusCode} ${res.body}');
-    if (res.statusCode != 200) return false;
-
+    if (res == null || res.statusCode != 200) return false;
     final decoded = json.decode(res.body) as Map<String, dynamic>;
-    if (decoded['status'] != 1) {
-      print('❌ [API] Error: ${decoded['message']}');
-      return false;
-    }
-    return true;
+    return decoded['status'] == 1;
   }
 
   /// Undo the last ball that was submitted
@@ -61,18 +53,12 @@ class MatchScoreService {
       String token,
       BuildContext context,
       ) async {
-    final uri = Uri.parse(
-      'https://cricjust.in/wp-json/custom-api-for-cricket/undo-last-ball-match'
-          '?api_logged_in_token=$token'
-          '&match_id=$matchId',
-    );
-
+    final uri = Uri.parse('$_baseUrl/undo-last-ball-match?api_logged_in_token=$token&match_id=$matchId');
     final res = await ApiHelper.safeRequest(
       context: context,
       requestFn: () => http.get(uri),
     );
     if (res == null || res.statusCode != 200) return false;
-
     final body = json.decode(res.body) as Map<String, dynamic>;
     return body['status'] == 1;
   }
@@ -82,60 +68,11 @@ class MatchScoreService {
     required int matchId,
     required String token,
   }) async {
-    final uri = Uri.parse(
-      'https://cricjust.in/wp-json/custom-api-for-cricket/end-inning'
-          '?api_logged_in_token=$token'
-          '&match_id=$matchId',
-    );
-
-    final response = await http.get(uri);
-    if (response.statusCode != 200) {
-      throw Exception('Failed to end inning (HTTP ${response.statusCode})');
-    }
-    final body = json.decode(response.body) as Map<String, dynamic>;
+    final uri = Uri.parse('$_baseUrl/end-inning?api_logged_in_token=$token&match_id=$matchId');
+    final res = await http.get(uri);
+    if (res.statusCode != 200) throw Exception('Failed to end innings (HTTP ${res.statusCode})');
+    final body = json.decode(res.body) as Map<String, dynamic>;
     return body['status'] == 1;
-  }
-
-  /// Fetch both teams’ squads (for batting/bowling) at match start
-  static Future<Map<String, List<Map<String, dynamic>>>> fetchSquads({
-    required int matchId,
-  }) async {
-    final uri = Uri.parse(
-      'https://cricjust.in/wp-json/custom-api-for-cricket/get-match'
-          '?match_id=$matchId&type=squad',
-    );
-    final res = await http.get(uri);
-    if (res.statusCode != 200) {
-      throw Exception('Failed to fetch squads (HTTP ${res.statusCode})');
-    }
-    final body = json.decode(res.body) as Map<String, dynamic>;
-    if (body['status'] != 1) {
-      throw Exception('Error fetching squads: ${body['message']}');
-    }
-    final data = body['data'][0] as Map<String, dynamic>;
-    return {
-      'team1': List<Map<String, dynamic>>.from(data['team_1'] as List),
-      'team2': List<Map<String, dynamic>>.from(data['team_2'] as List),
-    };
-  }
-
-  /// Fetch the current match score (to detect innings end & update UI)
-  static Future<Map<String, dynamic>> fetchCurrentScore({
-    required int matchId,
-  }) async {
-    final uri = Uri.parse(
-      'https://cricjust.in/wp-json/custom-api-for-cricket/get-current-match-score'
-          '?match_id=$matchId',
-    );
-    final res = await http.get(uri);
-    if (res.statusCode != 200) {
-      throw Exception('Failed to fetch current score (HTTP ${res.statusCode})');
-    }
-    final body = json.decode(res.body) as Map<String, dynamic>;
-    if (body['status'] != 1) {
-      throw Exception('Error fetching current score: ${body['message']}');
-    }
-    return body['current_score'] as Map<String, dynamic>;
   }
 
   /// End a completed match
@@ -146,16 +83,12 @@ class MatchScoreService {
     required String resultType, // Win, Draw, Tie, WinBToss
     int? winningTeam,
     int? runsOrWicket,
-    String? winByType, // Runs or Wickets
+    String? winByType,
     String? drawComment,
     String? superOvers,
   }) async {
-    final uri = Uri.parse(
-      'https://cricjust.in/wp-json/custom-api-for-cricket/end-match'
-          '?api_logged_in_token=$token&match_id=$matchId',
-    );
-
-    final body = {
+    final uri = Uri.parse('$_baseUrl/end-match?api_logged_in_token=$token&match_id=$matchId');
+    final payload = {
       'result_type': resultType,
       if (winningTeam != null) 'winning_team': winningTeam.toString(),
       if (runsOrWicket != null) 'runs_or_wicket': runsOrWicket.toString(),
@@ -164,104 +97,163 @@ class MatchScoreService {
       if (superOvers != null) 'super_overs': superOvers,
     };
 
-    print('📤 End Match Payload: $body');
-
     final res = await ApiHelper.safeRequest(
       context: context,
-      requestFn: () => http.post(uri, body: body),
+      requestFn: () => http.post(uri, body: payload),
     );
     if (res == null || res.statusCode != 200) {
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text("❌ Failed to end match")),
+        const SnackBar(content: Text('❌ Failed to end match')),
       );
       return false;
     }
 
-    final response = json.decode(res.body);
-    if (response['status'] == 1) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text("✅ Match ended successfully")),
-      );
-      return true;
-    }
-
+    final decoded = json.decode(res.body) as Map<String, dynamic>;
+    final ok = decoded['status'] == 1;
     ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(content: Text("❌ ${response['message'] ?? 'Match end failed'}")),
+      SnackBar(content: Text(ok ? '✅ Match ended successfully' : '❌ ${decoded['message']}')),
     );
-    return false;
+    return ok;
   }
-  /// Fetch the last six balls for a team in a match (extras placed last)
+
+  /// Fetch both teams’ squads at match start
+  static Future<Map<String, List<Map<String, dynamic>>>> fetchSquads({
+    required int matchId,
+  }) async {
+    final uri = Uri.parse('$_baseUrl/get-match?match_id=$matchId&type=squad');
+    final res = await http.get(uri);
+    if (res.statusCode != 200) throw Exception('Failed to fetch squads (HTTP ${res.statusCode})');
+    final body = json.decode(res.body) as Map<String, dynamic>;
+    if (body['status'] != 1) throw Exception('API error: ${body['message']}');
+    final data = (body['data'] as List).first as Map<String, dynamic>;
+    return {
+      'team1': List<Map<String, dynamic>>.from(data['team_1']),
+      'team2': List<Map<String, dynamic>>.from(data['team_2']),
+    };
+  }
+
+  /// Fetch the last six deliveries for a team in a match.
+  /// Falls back to current_score if needed.
+  /// Fetch the last six deliveries for a match & team.
+  /// 1) Calls the dedicated endpoint (with token)
+  /// 2) Falls back to current-score’s last_ball_data if needed
   static Future<List<Map<String, dynamic>>> fetchLastSixBalls({
     required int matchId,
     required int teamId,
   }) async {
-    final uri = Uri.parse(
-      'https://cricjust.in/wp-json/custom-api-for-cricket/get-last-six-balls'
-          '?match_id=$matchId&team_id=$teamId',
-    );
+    // 1️⃣ Load your API token from SharedPreferences
+    final prefs = await SharedPreferences.getInstance();
+    final token = prefs.getString('api_logged_in_token') ?? '';
 
+    // 2️⃣ Primary call: get-last-six-balls (now including token)
+    final sixUri = Uri.parse(
+      '$_baseUrl/get-last-six-balls'
+          '?api_logged_in_token=$token'
+          '&match_id=$matchId'
+          '&team_id=$teamId',
+    );
+    final sixRes = await http.get(sixUri);
+    debugPrint('🔍 GET $sixUri → ${sixRes.statusCode}: ${sixRes.body}');
+
+    if (sixRes.statusCode == 200) {
+      final body = json.decode(sixRes.body) as Map<String, dynamic>;
+      final rawMsg = body['message'];
+      return rawMsg.map<Map<String, dynamic>>((e) {
+        return {
+          'over_number'    : int.tryParse('${e['over_number']}') ?? 0,
+          'ball_number'    : int.tryParse('${e['ball_number']}')  ?? 0,
+          'runs'           : int.tryParse('${e['runs']}')         ?? 0,
+          'is_wicket'      : int.tryParse('${e['is_wicket']}')    ?? 0,
+          'is_extra'       : int.tryParse('${e['is_extra']}')     ?? 0,
+
+          // add these two:
+          'extra_run_type' : (e['extra_run_type'] ?? '').toString(),
+          'extra_run'      : int.tryParse('${e['extra_run']}')    ?? 0,
+        };
+      }).toList();
+
+      debugPrint('   ↳ No array returned, will fallback');
+    } else {
+      debugPrint('❌ HTTP ${sixRes.statusCode} on get-last-six-balls, fallback');
+    }
+
+    // 3️⃣ Fallback: current-match-score → current_inning.last_ball_data
+    debugPrint('🛠️ Fallback to get-current-match-score');
+    final curUri = Uri.parse(
+      '$_baseUrl/get-current-match-score'
+          '?api_logged_in_token=$token'
+          '&match_id=$matchId',
+    );
+    final curRes = await http.get(curUri);
+    debugPrint('🔍 GET $curUri → ${curRes.statusCode}: ${curRes.body}');
+    if (curRes.statusCode != 200) return [];
+
+    final curBody = json.decode(curRes.body) as Map<String, dynamic>;
+    if (curBody['status'] != 1) return [];
+
+    final inning   = (curBody['current_score'] as Map<String, dynamic>)['current_inning']
+    as Map<String, dynamic>?;
+    final lastList = inning?['last_ball_data'] as List<dynamic>?;
+
+    if (lastList == null || lastList.isEmpty) {
+      debugPrint('   ↳ Fallback last_ball_data empty');
+      return [];
+    }
+
+    debugPrint('   ↳ Parsing fallback last_ball_data');
+    return lastList.map<Map<String, dynamic>>((e) {
+      return {
+        'over_number': int.tryParse('${e['over_number']}') ?? 0,
+        'ball_number': int.tryParse('${e['ball_number']}') ?? 0,
+        'runs'       : int.tryParse('${e['runs'] ?? '0'}') ?? 0,
+        'is_wicket'  : int.tryParse('${e['is_wicket']}') ?? 0,
+        'is_extra'   : int.tryParse('${e['is_extra']}') ?? 0,
+      };
+    }).toList();
+  }
+
+  /// Fetch bowler overs from the full scorecard
+  static Future<Map<int, double>> fetchBowlerOversFromScorecard({
+    required int matchId,
+    required int fieldingTeamId,
+  }) async {
+    final uri = Uri.parse('$_baseUrl/get-match?match_id=$matchId&type=scorecard');
     final res = await http.get(uri);
-    if (res.statusCode != 200) {
-      debugPrint('❌ Failed to fetch last six balls (HTTP ${res.statusCode})');
-      return [];
+    if (res.statusCode != 200) return {};
+    final body = json.decode(res.body) as Map<String, dynamic>;
+    if (body['status'] != 1 || body['scorecard'] == null) return {};
+
+    final scorecard = body['scorecard'] as List<dynamic>;
+    Map<String, dynamic>? teamData;
+    for (final entry in scorecard) {
+      final t1 = entry['team_1'] as Map<String, dynamic>?;
+      final t2 = entry['team_2'] as Map<String, dynamic>?;
+      if (t1?['team_id'] == fieldingTeamId) { teamData = t1; break; }
+      if (t2?['team_id'] == fieldingTeamId) { teamData = t2; break; }
     }
+    if (teamData == null) return {};
 
-    final body = json.decode(res.body);
-    if (body['status'] != 1 || body['message'] == null) {
-      debugPrint('❌ Error from API: ${body['message']}');
-      return [];
+    final bowlers = teamData['scorecard']?['bowlers'] as List<dynamic>? ?? [];
+    final Map<int, double> oversMap = {};
+    for (final b in bowlers) {
+      final id = int.tryParse(b['bowler_id'].toString()) ?? 0;
+      final overs = int.tryParse(b['overs'].toString()) ?? 0;
+      final balls = int.tryParse(b['balls'].toString()) ?? 0;
+      if (id > 0) oversMap[id] = overs + balls / 6.0;
     }
-
-    final balls = List<Map<String, dynamic>>.from(body['message']);
-
-    // Sort: legal deliveries first, extras after
-    final legalBalls = balls.where((b) => b['is_extra'] == 0).toList();
-    final extras = balls.where((b) => b['is_extra'] == 1).toList();
-    return [...legalBalls, ...extras];
+    return oversMap;
   }
 
-  // lib/service/match_score_service.dart
-
-  static Future<Map<String, dynamic>?> getCurrentScore(int matchId, String token) async {
-    try {
-      final uri = Uri.parse(
-        'https://cricjust.in/wp-json/custom-api-for-cricket/get-current-match-score?match_id=$matchId&api_logged_in_token=$token',
-      );
-
-      final response = await http.get(uri);
-      final json = jsonDecode(response.body);
-
-      print('📡 Raw TV API Response: $json');
-
-      if (json['status'] == 1 && json['current_score'] != null) {
-        return json['current_score'];
-      }
-
-      return null;
-    } catch (e) {
-      print('❌ Error fetching current score: $e');
-      return null;
-    }
+  /// Fetches the full "current_score" JSON (including last_ball_data) for a match
+  static Future<Map<String, dynamic>?> getCurrentScore(
+      int matchId,
+      String token,
+      ) async {
+    final uri = Uri.parse('$_baseUrl/get-current-match-score?match_id=$matchId&api_logged_in_token=$token');
+    final res = await http.get(uri);
+    if (res.statusCode != 200) return null;
+    final body = json.decode(res.body) as Map<String, dynamic>;
+    if (body['status'] != 1 || body['current_score'] == null) return null;
+    return body['current_score'] as Map<String, dynamic>;
   }
-
-  static Future<List<Map<String, dynamic>>> fetchLastBalls(int matchId, int teamId) async {
-    final url = Uri.parse(
-      'https://cricjust.in/wp-json/custom-api-for-cricket/get-last-six-balls?match_id=$matchId&team_id=$teamId',
-    );
-    try {
-      final res = await http.get(url);
-      if (res.statusCode == 200) {
-        final json = jsonDecode(res.body);
-        if (json['status'] == 1 && json['message'] is List) {
-          return List<Map<String, dynamic>>.from(json['message']);
-        }
-      }
-    } catch (_) {}
-    return [];
-  }
-
-
-
-
-
 }

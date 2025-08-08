@@ -1047,8 +1047,19 @@ class _MatchUIScreenState extends State<MatchUIScreen> {
                         borderSide: BorderSide.none,
                       ),
                     ),
-                    onChanged: (v) => setState(() => _matchOvers = v),
+                    onChanged: (v) {
+                      final val = int.tryParse(v);
+                      setState(() {
+                        if (val == null || val <= 0) {
+                          _matchOvers = null;
+                          _showError('Total overs must be greater than 0');
+                        } else {
+                          _matchOvers = v;
+                        }
+                      });
+                    },
                   ),
+
                 ),
                 const SizedBox(width: 10),
                 Expanded(

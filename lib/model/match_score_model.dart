@@ -88,4 +88,36 @@ class MatchScoreRequest {
 
     return m;
   }
+  factory MatchScoreRequest.fromMap(Map<String, dynamic> json) {
+    return MatchScoreRequest(
+      matchId: int.parse(json['match_id']),
+      battingTeamId: int.parse(json['batting_team_id']),
+      onStrikePlayerId: int.parse(json['on_strike_player_id']),
+      onStrikePlayerOrder: int.parse(json['on_strike_player_order']),
+      nonStrikePlayerId: int.parse(json['non_strike_player_id']),
+      nonStrikePlayerOrder: int.parse(json['non_strike_player_order']),
+      bowler: int.parse(json['bowler']),
+      overNumber: int.parse(json['over_number']),
+      ballNumber: int.parse(json['ball_number']),
+      runs: int.parse(json['runs']),
+
+      // Optional values with null checks
+      extraRunType: json['extra_run_type'],
+      extraRun: json['extra_run'] != null ? int.tryParse(json['extra_run'].toString()) : null,
+      wktkprId: json['wktkpr_id'] != null ? int.tryParse(json['wktkpr_id'].toString()) : null,
+      ballType: json['ball_type'],
+      ballLength: json['ball_length'],
+      ballerTheWicket: json['baller_the_wicket'],
+      shot: json['shot'],
+      shotArea: json['shot_area'],
+      outPlayer: json['out_player'] != null ? int.tryParse(json['out_player'].toString()) : null,
+      isWicket: json['is_wicket'] != null ? int.tryParse(json['is_wicket'].toString()) : null,
+      wicketType: json['wicket_type'],
+      wicketTypeText: json['wicket_type_text'],
+      runOutBy: json['run_out_by'] != null ? int.tryParse(json['run_out_by'].toString()) : null,
+      catchBy: json['catch_by'] != null ? int.tryParse(json['catch_by'].toString()) : null,
+      commentry: json['commentry'],
+    );
+  }
+
 }

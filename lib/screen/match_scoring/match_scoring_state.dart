@@ -8,8 +8,18 @@ class MatchScoringState {
   String? onStrikeName, nonStrikeName, bowlerName;
   int onStrikeRuns = 0, onStrikeBalls = 0;
   int nonStrikeRuns = 0, nonStrikeBalls = 0;
+
+  // ✅ Wicketkeeper (private fields + getter/setter)
   int? _currentWicketKeeperId;
   String? _currentWicketKeeperName;
+
+  int? get currentWicketkeeperId => _currentWicketKeeperId;
+  String? get currentWicketkeeperName => _currentWicketKeeperName;
+
+  void setWicketkeeper(int id, String name) {
+    _currentWicketKeeperId = id;
+    _currentWicketKeeperName = name;
+  }
 
   // Match IDs & team info
   int? teamOneId, teamTwoId, firstInningTeamId;
@@ -58,10 +68,9 @@ class MatchScoringState {
   Color? matchResultColor;
   bool isCloseMatch = false;
 
-
+  // Playing XI
   List<int> teamOne11 = [];
   List<int> teamTwo11 = [];
-
 
   // Timeline & squads
   List<String> timeline = [];

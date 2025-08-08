@@ -59,7 +59,6 @@ class _ProfileScreenState extends State<ProfileScreen> {
 
       final jsonData = json.decode(resp.body) as Map<String, dynamic>;
       if (jsonData['status'] != 1) {
-        // 🔁 Auto logout if token is invalid or expired
         final prefs = await SharedPreferences.getInstance();
         await prefs.clear();
         if (mounted) {
@@ -88,17 +87,19 @@ class _ProfileScreenState extends State<ProfileScreen> {
 
   @override
   Widget build(BuildContext context) {
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+
     return Scaffold(
-      backgroundColor: Colors.grey[100],
-      appBar: AppBar(
-        backgroundColor: AppColors.primary,
-        elevation: 0,
+    appBar: AppBar(
+      backgroundColor: isDark ? Colors.black : AppColors.primary,
+       elevation: 0,
         centerTitle: true,
         title: Text(
           _profile?.displayName ?? 'My Profile',
           style: const TextStyle(color: Colors.white),
         ),
         iconTheme: const IconThemeData(color: Colors.white),
+        leading: BackButton(color: Colors.white),
         actions: [
           IconButton(
             icon: const Icon(Icons.edit, color: Colors.white),
@@ -115,22 +116,22 @@ class _ProfileScreenState extends State<ProfileScreen> {
           ),
         ],
       ),
-
       body: _isLoading
           ? const Center(child: CircularProgressIndicator())
           : (_error != null
-                ? Center(child: Text('Error: $_error'))
-                : _buildProfileView()),
+          ? Center(child: Text('Error: $_error'))
+          : _buildProfileView(context, isDark)),
     );
   }
 
-  Widget _buildProfileView() {
+  Widget _buildProfileView(BuildContext context, bool isDark) {
     final p = _profile!;
     return SingleChildScrollView(
       padding: const EdgeInsets.all(16),
       child: Column(
         children: [
           Card(
+            color: isDark ? Colors.black : Colors.white,
             elevation: 6,
             shape: RoundedRectangleBorder(
               borderRadius: BorderRadius.circular(20),
@@ -152,15 +153,14 @@ class _ProfileScreenState extends State<ProfileScreen> {
                   const SizedBox(height: 16),
                   Text(
                     p.displayName,
-                    style: AppTextStyles.heading.copyWith(fontSize: 24),
+                    style: AppTextStyles.heading.copyWith(fontSize: 22),
                   ),
                   const SizedBox(height: 4),
                   Text(
                     p.email,
                     style: AppTextStyles.caption.copyWith(
-                      fontSize: 15,
-                      fontWeight: FontWeight.w500,
-                      color: Colors.black87,
+                      fontSize: 14,
+                      color: Colors.grey,
                     ),
                   ),
                   const Divider(height: 32, thickness: 1.2),
@@ -223,7 +223,6 @@ class _ProfileScreenState extends State<ProfileScreen> {
               style: AppTextStyles.caption.copyWith(
                 fontWeight: FontWeight.w700,
                 fontSize: 15,
-                color: Colors.black87,
               ),
             ),
           ),
@@ -234,7 +233,6 @@ class _ProfileScreenState extends State<ProfileScreen> {
               style: AppTextStyles.caption.copyWith(
                 fontWeight: FontWeight.w500,
                 fontSize: 15,
-                color: Colors.black,
               ),
             ),
           ),

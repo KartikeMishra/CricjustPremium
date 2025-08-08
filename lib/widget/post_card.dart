@@ -49,21 +49,21 @@ class PostCard extends StatelessWidget {
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 // 🖼️ Image
-                CachedNetworkImage(
-                  imageUrl: post.image,
-                  height: 200,
-                  width: double.infinity,
-                  fit: BoxFit.cover,
-                  placeholder: (context, url) => Container(
-                    height: 200,
-                    color: isDark ? Colors.grey[850] : Colors.grey[300],
-                    child: const Center(child: CircularProgressIndicator()),
-                  ),
-                  errorWidget: (context, url, error) => Container(
-                    height: 200,
-                    color: isDark ? Colors.grey[850] : Colors.grey[300],
-                    child: const Center(
-                      child: Icon(Icons.broken_image, size: 40),
+                AspectRatio(
+                  aspectRatio: 16 / 9, // You can try 3 / 2 or 4 / 3 if preferred
+                  child: CachedNetworkImage(
+                    imageUrl: post.image,
+                    width: double.infinity,
+                    fit: BoxFit.cover,
+                    placeholder: (context, url) => Container(
+                      color: isDark ? Colors.grey[850] : Colors.grey[300],
+                      child: const Center(child: CircularProgressIndicator()),
+                    ),
+                    errorWidget: (context, url, error) => Container(
+                      color: isDark ? Colors.grey[850] : Colors.grey[300],
+                      child: const Center(
+                        child: Icon(Icons.broken_image, size: 40),
+                      ),
                     ),
                   ),
                 ),

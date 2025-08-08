@@ -1,26 +1,28 @@
-import 'package:cricjust_premium/provider/match_state.dart';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:path_provider/path_provider.dart';
 import 'package:hive_flutter/hive_flutter.dart';
 
-import 'model/offline_score_model.dart';
 import 'screen/home_screen.dart';
-import 'screen/login_screen.dart'; // ✅ Required for named route
+import 'screen/login_screen.dart';
+import 'provider/match_state.dart';
 import 'theme/theme_provider.dart';
 import 'theme/theme_manager.dart';
+import 'model/offline_ball_event.dart'; // ✅ Hive model import
 
-// 1️⃣ Declare a global RouteObserver:
+// 1️⃣ Declare a global RouteObserver
 final RouteObserver<ModalRoute<void>> routeObserver =
 RouteObserver<ModalRoute<void>>();
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
 
-  // 2️⃣ Initialize Hive for offline scoring
+  // 2️⃣ Initialize Hive and register adapter
   final appDir = await getApplicationDocumentsDirectory();
   await Hive.initFlutter(appDir.path);
-  Hive.registerAdapter(OfflineScoreAdapter());
+
+  Hive.registerAdapter(OfflineBallEventAdapter()); // ✅ Register your adapter
+  await Hive.openBox<OfflineBallEvent>('offline_scores'); // ✅ Open the box
 
   runApp(
     MultiProvider(
@@ -46,12 +48,9 @@ class CricjustApp extends StatelessWidget {
       theme: AppTheme.lightTheme,
       darkTheme: AppTheme.darkTheme,
       themeMode: themeProvider.themeMode,
-
-      // ✅ Add named route for /login
       routes: {
         '/login': (context) => const LoginScreen(),
       },
-
       navigatorObservers: [routeObserver],
       home: const HomeScreen(),
     );

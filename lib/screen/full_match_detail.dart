@@ -99,7 +99,10 @@ class _FullMatchDetailState extends State<FullMatchDetail>
           if (inning['score'] != null) {
             if (!inning['score'].containsKey('last_ball') || inning['score']['last_ball'] == null) {
               final teamId = inning['team_id'];
-              final lastBalls = await MatchScoreService.fetchLastBalls(widget.matchId, teamId);
+              final lastBalls = await MatchScoreService.fetchLastSixBalls(
+                matchId: widget.matchId,
+                teamId:   teamId,
+              );
               if (lastBalls.isNotEmpty) {
                 final latest = lastBalls.first;
                 inning['score']['last_ball'] = latest['runs'].toString(); // 👈 Use fallback
@@ -255,19 +258,22 @@ class _FullMatchDetailState extends State<FullMatchDetail>
         body: NestedScrollView(
           headerSliverBuilder: (context, innerBoxIsScrolled) => [
             if (_liveScore != null)
-              SliverToBoxAdapter(
-                child: Padding(
-                  padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-                  child: TVStyleScoreScreen(
-                    teamName: _liveScore!['team_name'] ?? '',
-                    runs: int.tryParse(_liveScore!['score']['total_runs'].toString()) ?? 0,
-                    wickets: int.tryParse(_liveScore!['score']['total_wkts'].toString()) ?? 0,
-                    overs: _oversAsDouble(_liveScore!['score']),
-                    lastBallType: _lastBallType(_liveScore!['score']),
-                    isLive: isLive,
+              if (_liveScore != null)
+                SliverToBoxAdapter(
+                  child: Padding(
+                    padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                    child: TVStyleScoreScreen(
+                      teamName: _liveScore!['team_name'] ?? '',
+                      runs: int.tryParse(_liveScore!['score']['total_runs'].toString()) ?? 0,
+                      wickets: int.tryParse(_liveScore!['score']['total_wkts'].toString()) ?? 0,
+                      overs: _oversAsDouble(_liveScore!['score']),
+                      extras: int.tryParse(_liveScore!['score']['extra_runs'].toString()) ?? 0, // ✅ New
+                      lastBallType: _lastBallType(_liveScore!['score']),
+                      isLive: isLive,
+                    ),
                   ),
                 ),
-              ),
+
           ],
           body: TabBarView(
             controller: _tabController,
