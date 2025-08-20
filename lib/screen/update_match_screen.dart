@@ -1025,7 +1025,7 @@ class _UpdateMatchScreenState extends State<UpdateMatchScreen> {
               backgroundColor: isDark ? Colors.white10 : Colors.grey[100],
               onSelected: (sel) {
                 setState(() {
-                  if (sel && selectedIds.length < 11) selectedIds.add(id);
+                  if (sel && selectedIds.length < 20) selectedIds.add(id);
                   if (!sel) selectedIds.remove(id);
                 });
               },

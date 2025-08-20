@@ -67,12 +67,12 @@ class _TournamentMatchesTabState extends State<TournamentMatchesTab> {
   }
 
   Widget _buildTabButton(
-    String label,
-    String type,
-    Color selectedColor,
-    Color unselectedBg,
-    Color unselectedText,
-  ) {
+      String label,
+      String type,
+      Color selectedColor,
+      Color unselectedBg,
+      Color unselectedText,
+      ) {
     final isSelected = _selectedType == type;
     return Expanded(
       child: ElevatedButton(

@@ -3,9 +3,12 @@
 import 'dart:async';
 import 'dart:ui';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:shared_preferences/shared_preferences.dart';
+
 import '../model/venue_model.dart';
 import '../service/venue_service.dart';
+import '../service/session_manager.dart';
 import '../theme/color.dart';
 import 'login_screen.dart';
 import 'add_venue_screen.dart';
@@ -19,41 +22,85 @@ class GetVenueScreen extends StatefulWidget {
 }
 
 class _GetVenueScreenState extends State<GetVenueScreen> {
+  // Data
   final List<Venue> _venues = [];
-  bool _loading = false;
-  String _search = '';
-  Timer? _debounce;
+
+  // Session
   String? _apiToken;
+
+  // Paging / loading
   final int _limit = 20;
   int _skip = 0;
-  final ScrollController _scrollController = ScrollController();
-  final TextEditingController _searchController = TextEditingController();
+  bool _hasMore = true;
+  bool _loading = true;       // show spinner on first load
+  bool _loadingMore = false;  // page loader
+
+  // Search
+  String _search = '';
+  Timer? _debounce;
+
+  // Controllers
+  final _scrollController = ScrollController();
+  final _searchController = TextEditingController();
 
   @override
   void initState() {
     super.initState();
-    _checkLoginAndInit();
     _scrollController.addListener(_onScroll);
     _searchController.addListener(_onSearchChanged);
+    _init();
   }
 
-  Future<void> _checkLoginAndInit() async {
-    final prefs = await SharedPreferences.getInstance();
-    final token = prefs.getString('api_logged_in_token');
-    if (token == null || token.isEmpty) {
+  @override
+  void dispose() {
+    _scrollController.removeListener(_onScroll);
+    _searchController.removeListener(_onSearchChanged);
+    _scrollController.dispose();
+    _searchController.dispose();
+    _debounce?.cancel();
+    super.dispose();
+  }
+
+  // ---------- Session ----------
+  Future<bool> _ensureSession() async {
+    _apiToken = await SessionManager.getToken();
+    if (_apiToken == null || _apiToken!.isEmpty) {
+      if (!mounted) return false;
       Navigator.pushReplacement(
         context,
         MaterialPageRoute(builder: (_) => const LoginScreen()),
       );
-      return;
+      return false;
     }
-    setState(() => _apiToken = token);
-    await _fetchVenues();
+    return true;
   }
 
-  Future<void> _fetchVenues() async {
-    if (_loading || _apiToken == null) return;
-    setState(() => _loading = true);
+  Future<void> _init() async {
+    if (!await _ensureSession()) return;
+    // reset paging
+    setState(() {
+      _skip = 0;
+      _hasMore = true;
+      _venues.clear();
+      _loading = true;
+    });
+    await _fetchVenues(refresh: true);
+    if (mounted) setState(() => _loading = false);
+  }
+
+  // ---------- Fetch ----------
+  Future<void> _fetchVenues({bool refresh = false}) async {
+    if (_loadingMore) return;
+    if (!await _ensureSession()) return;
+
+    if (refresh) {
+      _skip = 0;
+      _hasMore = true;
+      _venues.clear();
+    }
+    if (!_hasMore) return;
+
+    setState(() => _loadingMore = true);
     try {
       final data = await VenueService.fetchVenues(
         apiToken: _apiToken!,
@@ -61,33 +108,74 @@ class _GetVenueScreenState extends State<GetVenueScreen> {
         skip: _skip,
         search: _search,
       );
+
       setState(() {
         _venues.addAll(data);
         _skip += data.length;
+        _hasMore = data.length == _limit; // stop when fewer than limit
       });
     } catch (e) {
-      debugPrint('Error fetching venues: $e');
+      final lower = e.toString().toLowerCase();
+
+      // ✅ Treat "no venue found" (and similar) as an empty page, not an error
+      final isNoResults =
+          lower.contains('no venue found') ||
+              lower.contains('no venues found') ||
+              lower.contains('no data') ||
+              lower.contains('no record');
+
+      if (isNoResults) {
+        if (mounted) {
+          setState(() {
+            _hasMore = false; // no more pages
+            // if this was a refresh and truly empty, make sure list is empty
+            if (refresh) _venues.clear();
+          });
+        }
+        // Do not show a snackbar for this case
+        return;
+      }
+
+      // Auth/session handling
+      if (lower.contains('401') ||
+          lower.contains('unauthorized') ||
+          lower.contains('invalid api logged in token') ||
+          lower.contains('session expired')) {
+        await SessionManager.clear();
+        if (!mounted) return;
+        Navigator.pushReplacement(
+          context,
+          MaterialPageRoute(builder: (_) => const LoginScreen()),
+        );
+        return;
+      }
+
+      if (mounted) {
+        ScaffoldMessenger.of(context)
+            .showSnackBar(SnackBar(content: Text('Error: $e')));
+      }
     } finally {
-      if (mounted) setState(() => _loading = false);
+      if (mounted) setState(() => _loadingMore = false);
     }
   }
 
+
+  // ---------- Handlers ----------
   void _onScroll() {
-    if (_scrollController.position.pixels >
-        _scrollController.position.maxScrollExtent - 200) {
+    if (_scrollController.position.pixels >=
+        _scrollController.position.maxScrollExtent - 200 &&
+        !_loadingMore &&
+        !_loading &&
+        _hasMore) {
       _fetchVenues();
     }
   }
 
   void _onSearchChanged() {
     if (_debounce?.isActive ?? false) _debounce!.cancel();
-    _debounce = Timer(const Duration(milliseconds: 500), () {
-      setState(() {
-        _venues.clear();
-        _skip = 0;
-        _search = _searchController.text.trim();
-      });
-      _fetchVenues();
+    _debounce = Timer(const Duration(milliseconds: 450), () {
+      setState(() => _search = _searchController.text.trim());
+      _fetchVenues(refresh: true);
     });
   }
 
@@ -100,14 +188,8 @@ class _GetVenueScreenState extends State<GetVenueScreen> {
         title: const Text('Confirm Delete'),
         content: Text('Are you sure you want to delete "${venue.name}"?'),
         actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(context, false),
-            child: const Text('Cancel'),
-          ),
-          TextButton(
-            onPressed: () => Navigator.pop(context, true),
-            child: const Text('Delete'),
-          ),
+          TextButton(onPressed: () => Navigator.pop(context, false), child: const Text('Cancel')),
+          TextButton(onPressed: () => Navigator.pop(context, true), child: const Text('Delete')),
         ],
       ),
     );
@@ -119,24 +201,39 @@ class _GetVenueScreenState extends State<GetVenueScreen> {
         venueId: venue.venueId,
       );
       setState(() => _venues.removeWhere((v) => v.venueId == venue.venueId));
-      ScaffoldMessenger.of(
-        context,
-      ).showSnackBar(const SnackBar(content: Text('Venue deleted')));
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Venue deleted')),
+      );
     } catch (e) {
-      ScaffoldMessenger.of(
-        context,
-      ).showSnackBar(SnackBar(content: Text('Delete failed: $e')));
+      final lower = e.toString().toLowerCase();
+      if (lower.contains('unauthorized') || lower.contains('session expired')) {
+        await SessionManager.clear();
+        if (!mounted) return;
+        Navigator.pushReplacement(
+          context,
+          MaterialPageRoute(builder: (_) => const LoginScreen()),
+        );
+        return;
+      }
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Delete failed: $e')),
+      );
     }
   }
 
-  @override
-  void dispose() {
-    _scrollController.dispose();
-    _searchController.dispose();
-    _debounce?.cancel();
-    super.dispose();
+  Future<void> _hardRefresh() async {
+    if (!await _ensureSession()) return;
+    setState(() {
+      _skip = 0;
+      _hasMore = true;
+      _venues.clear();
+      _loading = true;
+    });
+    await _fetchVenues(refresh: true);
+    if (mounted) setState(() => _loading = false);
   }
 
+  // ---------- UI ----------
   @override
   Widget build(BuildContext context) {
     final isDark = Theme.of(context).brightness == Brightness.dark;
@@ -147,241 +244,204 @@ class _GetVenueScreenState extends State<GetVenueScreen> {
     return Scaffold(
       backgroundColor: bgColor,
 
-      // ─── Header ─────────────────────────────────────────────
-      appBar: AppBar(
-        // make the AppBar itself transparent so our gradient shows through
-        backgroundColor: Colors.transparent,
-        elevation: 0,
-        centerTitle: true,
-        // put your gradient here
-        flexibleSpace: Container(
-          decoration: BoxDecoration(
-            gradient: isDark
-                ? null
-                : const LinearGradient(
-                    colors: [AppColors.primary, Color(0xFF42A5F5)],
-                    begin: Alignment.topLeft,
-                    end: Alignment.bottomRight,
-                  ),
-            color: isDark ? const Color(0xFF1E1E1E) : null,
-            borderRadius: const BorderRadius.vertical(
-              bottom: Radius.circular(20),
-            ),
+    appBar: AppBar(
+    backgroundColor: Colors.transparent,
+      elevation: 0,
+      centerTitle: true,
+
+      // ✅ makes the back arrow (and any AppBar icons) white
+      iconTheme: const IconThemeData(color: Colors.white),
+
+      // (optional) force a white back arrow when the route can pop
+      leading: Navigator.canPop(context) ? const BackButton(color: Colors.white) : null,
+
+      // (optional) white status bar icons over the gradient
+      systemOverlayStyle: SystemUiOverlayStyle.light,
+
+      flexibleSpace: Container(
+        decoration: BoxDecoration(
+          gradient: isDark
+              ? null
+              : const LinearGradient(
+            colors: [AppColors.primary, Color(0xFF42A5F5)],
+            begin: Alignment.topLeft,
+            end: Alignment.bottomRight,
           ),
+          color: isDark ? const Color(0xFF1E1E1E) : null,
+          borderRadius: const BorderRadius.vertical(bottom: Radius.circular(20)),
         ),
-        title: Text(
-          'Manage Venues',
-          style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold),
-        ),
-        // now attach your search bar as the bottom widget
-        bottom: PreferredSize(
-          preferredSize: const Size.fromHeight(70),
-          child: Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-            child: Container(
-              decoration: BoxDecoration(
-                color: isDark ? Colors.white12 : Colors.white,
-                borderRadius: BorderRadius.circular(30),
-                boxShadow: [
-                  BoxShadow(
-                    color: isDark ? Colors.black26 : Colors.black12,
-                    blurRadius: 6,
-                    offset: const Offset(0, 3),
-                  ),
-                ],
-              ),
-              child: TextField(
-                controller: _searchController,
-                style: TextStyle(color: isDark ? Colors.white : Colors.black87),
-                decoration: InputDecoration(
-                  hintText: 'Search venues...',
-                  hintStyle: TextStyle(
-                    color: isDark ? Colors.white54 : Colors.grey,
-                  ),
-                  border: InputBorder.none,
-                  prefixIcon: Icon(Icons.search, color: AppColors.primary),
-                  contentPadding: const EdgeInsets.symmetric(
-                    horizontal: 20,
-                    vertical: 16,
-                  ),
+      ),
+      title: const Text(
+        'Manage Venues',
+        style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold),
+      ),
+      bottom: PreferredSize(
+        preferredSize: const Size.fromHeight(70),
+        child: Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+          child: Container(
+            decoration: BoxDecoration(
+              color: isDark ? Colors.white12 : Colors.white,
+              borderRadius: BorderRadius.circular(30),
+              boxShadow: [
+                BoxShadow(
+                  color: isDark ? Colors.black26 : Colors.black12,
+                  blurRadius: 6,
+                  offset: const Offset(0, 3),
                 ),
+              ],
+            ),
+            child: TextField(
+              controller: _searchController,
+              style: TextStyle(color: isDark ? Colors.white : Colors.black87),
+              decoration: InputDecoration(
+                hintText: 'Search venues...',
+                hintStyle: TextStyle(color: isDark ? Colors.white54 : Colors.grey),
+                border: InputBorder.none,
+                prefixIcon: const Icon(Icons.search, color: AppColors.primary),
+                contentPadding: const EdgeInsets.symmetric(horizontal: 20, vertical: 16),
               ),
             ),
           ),
         ),
       ),
+    ),
 
-      // ─── Body ────────────────────────────────────────────────
-      body: _loading && _venues.isEmpty
+    body: _loading && _venues.isEmpty
           ? const Center(child: CircularProgressIndicator())
-          : ListView.builder(
-              controller: _scrollController,
-              padding: const EdgeInsets.symmetric(vertical: 8),
-              itemCount: _venues.length,
-              itemBuilder: (ctx, i) {
-                final v = _venues[i];
-                return Container(
-                  margin: const EdgeInsets.symmetric(
-                    horizontal: 16,
-                    vertical: 8,
-                  ),
-                  decoration: BoxDecoration(
-                    color: cardColor,
-                    borderRadius: BorderRadius.circular(16),
-                    boxShadow: [
-                      if (!isDark)
-                        const BoxShadow(
-                          color: Colors.black12,
-                          blurRadius: 5,
-                          offset: Offset(0, 3),
-                        ),
-                    ],
-                  ),
-                  child: ListTile(
-                    contentPadding: const EdgeInsets.symmetric(
-                      horizontal: 16,
-                      vertical: 10,
-                    ),
-                    title: Text(
-                      v.name,
-                      style: TextStyle(
-                        fontWeight: FontWeight.bold,
-                        color: textColor,
-                      ),
-                    ),
-                    subtitle: Padding(
-                      padding: const EdgeInsets.only(top: 4),
-                      child: Text(
-                        v.info,
-                        style: TextStyle(
-                          fontSize: 13,
-                          color: isDark ? Colors.white70 : Colors.black54,
-                        ),
-                      ),
-                    ),
-                    trailing: Row(
-                      mainAxisSize: MainAxisSize.min,
-                      children: [
-                        IconButton(
-                          icon: Icon(
-                            Icons.edit,
-                            color: isDark ? Colors.white70 : Colors.blueAccent,
-                          ),
-                          onPressed: () async {
-                            final updated = await Navigator.push<bool>(
-                              context,
-                              MaterialPageRoute(
-                                builder: (_) => UpdateVenueScreen(venue: v),
-                              ),
-                            );
-                            if (updated == true) {
-                              setState(() {
-                                _venues.clear();
-                                _skip = 0;
-                              });
-                              _fetchVenues();
-                            }
-                          },
-                        ),
-                        IconButton(
-                          icon: Icon(
-                            Icons.delete,
-                            color: isDark
-                                ? Colors.red.shade300
-                                : Colors.redAccent,
-                          ),
-                          onPressed: () => _confirmDelete(v),
-                        ),
-                      ],
-                    ),
-                  ),
-                );
-              },
-            ),
-
-      // ─── FAB ──────────────────────────────────────────────────
-      floatingActionButton: isDark
-          ? GestureDetector(
-              onTap: () async {
-                final result = await Navigator.push<bool>(
-                  context,
-                  MaterialPageRoute(builder: (_) => const AddVenueScreen()),
-                );
-                if (result == true) {
-                  setState(() {
-                    _venues.clear();
-                    _skip = 0;
-                  });
-                  _fetchVenues();
-                }
-              },
-              child: ClipRRect(
+          : RefreshIndicator(
+        onRefresh: _hardRefresh,
+        child: _venues.isEmpty
+            ? ListView(
+          physics: const AlwaysScrollableScrollPhysics(),
+          children: const [
+            SizedBox(height: 220),
+            Center(child: Text('No venues found.')),
+            SizedBox(height: 400),
+          ],
+        )
+            : ListView.builder(
+          controller: _scrollController,
+          padding: const EdgeInsets.symmetric(vertical: 8),
+          itemCount: _venues.length + (_loadingMore ? 1 : 0),
+          itemBuilder: (ctx, i) {
+            if (i >= _venues.length) {
+              return const Padding(
+                padding: EdgeInsets.all(16),
+                child: Center(child: CircularProgressIndicator()),
+              );
+            }
+            final v = _venues[i];
+            return Container(
+              margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+              decoration: BoxDecoration(
+                color: cardColor,
                 borderRadius: BorderRadius.circular(16),
-                child: BackdropFilter(
-                  filter: ImageFilter.blur(sigmaX: 8, sigmaY: 8),
-                  child: AnimatedContainer(
-                    duration: const Duration(milliseconds: 200),
-                    padding: const EdgeInsets.symmetric(
-                      horizontal: 16,
-                      vertical: 12,
+                boxShadow: [
+                  if (!isDark)
+                    const BoxShadow(
+                      color: Colors.black12,
+                      blurRadius: 5,
+                      offset: Offset(0, 3),
                     ),
-                    decoration: BoxDecoration(
-                      color: Colors.white.withOpacity(0.1),
-                      borderRadius: BorderRadius.circular(16),
-                      border: Border.all(color: Colors.white24),
-                      boxShadow: [
-                        BoxShadow(
-                          color: Colors.white.withOpacity(0.3),
-                          blurRadius: 12,
-                          offset: const Offset(0, 4),
-                        ),
-                      ],
-                    ),
-                    child: Row(
-                      mainAxisSize: MainAxisSize.min,
-                      children: const [
-                        Icon(Icons.add, color: Colors.white),
-                        SizedBox(width: 8),
-                        Text(
-                          'Add Venue',
-                          style: TextStyle(
-                            color: Colors.white,
-                            fontWeight: FontWeight.bold,
-                            fontSize: 16,
-                          ),
-                        ),
-                      ],
+                ],
+              ),
+              child: ListTile(
+                contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+                title: Text(
+                  v.name,
+                  style: TextStyle(fontWeight: FontWeight.bold, color: textColor),
+                ),
+                subtitle: Padding(
+                  padding: const EdgeInsets.only(top: 4),
+                  child: Text(
+                    v.info,
+                    style: TextStyle(
+                      fontSize: 13,
+                      color: isDark ? Colors.white70 : Colors.black54,
                     ),
                   ),
                 ),
+                trailing: Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    IconButton(
+                      icon: Icon(Icons.edit,
+                          color: isDark ? Colors.white70 : Colors.blueAccent),
+                      onPressed: () async {
+                        final updated = await Navigator.push<bool>(
+                          context,
+                          MaterialPageRoute(
+                            builder: (_) => UpdateVenueScreen(venue: v),
+                          ),
+                        );
+                        if (updated == true) {
+                          await _hardRefresh();
+                        }
+                      },
+                    ),
+                    IconButton(
+                      icon: Icon(Icons.delete,
+                          color: isDark ? Colors.red.shade300 : Colors.redAccent),
+                      onPressed: () => _confirmDelete(v),
+                    ),
+                  ],
+                ),
               ),
-            )
-          : FloatingActionButton.extended(
-              onPressed: () async {
-                final result = await Navigator.push<bool>(
-                  context,
-                  MaterialPageRoute(builder: (_) => const AddVenueScreen()),
-                );
-                if (result == true) {
-                  setState(() {
-                    _venues.clear();
-                    _skip = 0;
-                  });
-                  _fetchVenues();
-                }
-              },
-              icon: const Icon(Icons.add, color: Colors.white),
-              label: const Text(
-                'Add Venue',
-                style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16),
-              ),
-              backgroundColor: AppColors.primary,
-              foregroundColor: Colors.white,
-              elevation: 6,
-              shape: RoundedRectangleBorder(
+            );
+          },
+        ),
+      ),
+
+      floatingActionButton: isDark
+          ? GestureDetector(
+        onTap: () async {
+          final created = await Navigator.push<bool>(
+            context,
+            MaterialPageRoute(builder: (_) => const AddVenueScreen()),
+          );
+          if (created == true) await _hardRefresh();
+        },
+        child: ClipRRect(
+          borderRadius: BorderRadius.circular(16),
+          child: BackdropFilter(
+            filter: ImageFilter.blur(sigmaX: 8, sigmaY: 8),
+            child: Container(
+              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+              decoration: BoxDecoration(
+                color: Colors.white.withOpacity(0.1),
                 borderRadius: BorderRadius.circular(16),
+                border: Border.all(color: Colors.white24),
+              ),
+              child: Row(
+                mainAxisSize: MainAxisSize.min,
+                children: const [
+                  Icon(Icons.add, color: Colors.white),
+                  SizedBox(width: 8),
+                  Text('Add Venue',
+                      style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
+                ],
               ),
             ),
+          ),
+        ),
+      )
+          : FloatingActionButton.extended(
+        onPressed: () async {
+          final created = await Navigator.push<bool>(
+            context,
+            MaterialPageRoute(builder: (_) => const AddVenueScreen()),
+          );
+          if (created == true) await _hardRefresh();
+        },
+        icon: const Icon(Icons.add, color: Colors.white),
+        label: const Text('Add Venue',
+            style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16)),
+        backgroundColor: AppColors.primary,
+        foregroundColor: Colors.white,
+        elevation: 6,
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+      ),
     );
   }
 }

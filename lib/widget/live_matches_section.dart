@@ -9,6 +9,9 @@ import '../model/match_model.dart';
 import '../service/match_service.dart';
 import '../screen/full_match_detail.dart';
 
+// 🔹 NEW: subtle card graphics (glow + watermark)
+import 'section_graphics.dart'; // if this file sits in lib/widget/
+
 class LiveMatchesSection extends StatefulWidget {
   final void Function(bool hasData)? onDataLoaded;
 
@@ -24,6 +27,8 @@ class _LiveMatchesSectionState extends State<LiveMatchesSection> {
   final int _visibleCount = 5;
   final PageController _pageController = PageController(viewportFraction: 0.92);
   int _currentPage = 0;
+
+  static const double _baseHeight = 290;
 
   @override
   void initState() {
@@ -53,18 +58,22 @@ class _LiveMatchesSectionState extends State<LiveMatchesSection> {
     if (_matches.isEmpty) return const SizedBox.shrink();
 
     final isDark = Theme.of(context).brightness == Brightness.dark;
+    final textScale = MediaQuery.of(context).textScaleFactor;
+    final double cardHeight =
+    (_baseHeight + (textScale - 1.0) * 52).clamp(280.0, 340.0);
 
     return Column(
       children: [
         SizedBox(
-          height: 270,
+          height: cardHeight,
           child: PageView.builder(
             controller: _pageController,
-            //   itemCount: _matches.length,
             itemCount: min(_matches.length, _visibleCount),
             onPageChanged: (index) => setState(() => _currentPage = index),
             itemBuilder: (context, index) {
               final match = _matches[index];
+              final isActive = index == _currentPage;
+
               return GestureDetector(
                 onTap: () => Navigator.push(
                   context,
@@ -72,107 +81,192 @@ class _LiveMatchesSectionState extends State<LiveMatchesSection> {
                     builder: (_) => FullMatchDetail(matchId: match.matchId),
                   ),
                 ),
-                child: AnimatedContainer(
-                  duration: const Duration(milliseconds: 350),
-                  margin: const EdgeInsets.symmetric(
-                    horizontal: 8,
-                    vertical: 10,
-                  ),
-                  decoration: BoxDecoration(
-                    borderRadius: BorderRadius.circular(20),
-                    gradient: isDark
-                        ? null
-                        : const LinearGradient(
-                            colors: [Color(0xFFE3F2FD), Colors.white],
-                            begin: Alignment.topLeft,
-                            end: Alignment.bottomRight,
-                          ),
-                    color: isDark ? const Color(0xFF2A2A2A) : null,
-                    boxShadow: isDark
-                        ? []
-                        : [
-                            BoxShadow(
-                              color: Colors.blue.withOpacity(0.1),
-                              blurRadius: 12,
-                              offset: const Offset(0, 6),
-                            ),
-                          ],
-                  ),
-                  child: ClipRRect(
-                    borderRadius: BorderRadius.circular(20),
-                    child: BackdropFilter(
-                      filter: ImageFilter.blur(sigmaX: 3, sigmaY: 3),
-                      child: Padding(
-                        padding: const EdgeInsets.all(16),
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            _buildMatchHeader(match),
-                            const SizedBox(height: 8),
-                            Text(
-                              match.tournamentName,
-                              style: Theme.of(context).textTheme.bodyMedium
-                                  ?.copyWith(
-                                    color: isDark
-                                        ? Colors.white70
-                                        : Colors.black87,
-                                  ),
-                              maxLines: 1,
-                              overflow: TextOverflow.ellipsis,
-                            ),
-                            const SizedBox(height: 6),
-                            Text(
-                              "Date: ${_formatDate(match.matchDate, match.matchTime)}",
-                              style: Theme.of(context).textTheme.labelMedium
-                                  ?.copyWith(
-                                    color: isDark
-                                        ? Colors.grey[400]
-                                        : Colors.grey[700],
-                                    fontStyle: FontStyle.italic,
-                                  ),
-                            ),
-                            const SizedBox(height: 12),
-                            _buildTeamRow(
-                              match.team1Logo,
-                              match.team1Name,
-                              match.team1Runs,
-                              match.team1Wickets,
-                              match.team1Overs,
-                              match.team1Balls,
-                            ),
-                            const SizedBox(height: 8),
-                            _buildTeamRow(
-                              match.team2Logo,
-                              match.team2Name,
-                              match.team2Runs,
-                              match.team2Wickets,
-                              match.team2Overs,
-                              match.team2Balls,
-                            ),
-                            const Spacer(),
-                            if (match.toss.isNotEmpty)
-                              Padding(
-                                padding: const EdgeInsets.only(top: 6),
-                                child: Text(
-                                  match.toss,
-                                  style: Theme.of(context).textTheme.bodySmall
-                                      ?.copyWith(
-                                        fontStyle: FontStyle.italic,
-                                        color: isDark ? Colors.white60 : null,
-                                      ),
-                                ),
-                              ),
-                            if (match.result.isNotEmpty)
-                              Text(
-                                match.result,
-                                style: Theme.of(context).textTheme.bodySmall
-                                    ?.copyWith(
-                                      fontWeight: FontWeight.w500,
-                                      color: isDark ? Colors.white70 : null,
-                                    ),
-                              ),
-                          ],
+                child: AnimatedScale(
+                  scale: isActive ? 1.0 : 0.97,
+                  duration: const Duration(milliseconds: 250),
+                  curve: Curves.easeOut,
+                  child: AnimatedContainer(
+                    duration: const Duration(milliseconds: 350),
+                    margin: const EdgeInsets.symmetric(horizontal: 8, vertical: 8),
+                    decoration: BoxDecoration(
+                      borderRadius: BorderRadius.circular(20),
+                      gradient: isDark
+                          ? null
+                          : const LinearGradient(
+                        colors: [Color(0xFFEAF4FF), Colors.white],
+                        begin: Alignment.topLeft,
+                        end: Alignment.bottomRight,
+                      ),
+                      color: isDark ? const Color(0xFF1E1E1E) : null,
+                      boxShadow: isDark
+                          ? [
+                        BoxShadow(
+                          color: Colors.black.withOpacity(0.35),
+                          blurRadius: 16,
+                          offset: const Offset(0, 10),
+                        )
+                      ]
+                          : [
+                        BoxShadow(
+                          color: Colors.blue.withOpacity(0.10),
+                          blurRadius: 14,
+                          offset: const Offset(0, 8),
                         ),
+                      ],
+                      border: Border.all(
+                          color: isDark ? Colors.white12 : Colors.black12),
+                    ),
+                    child: ClipRRect(
+                      borderRadius: BorderRadius.circular(20),
+                      child: Stack(
+                        children: [
+                          // 🌈 Soft glow behind content
+                          const Positioned.fill(
+                            child: CardAuroraOverlay(intensity: .9),
+                          ),
+                          // 🏏 Big watermark icon (super subtle)
+                          const Positioned.fill(
+                            child: WatermarkIcon(
+                              icon: Icons.sports_cricket_rounded,
+                              alignment: Alignment.bottomRight,
+                              size: 120,
+                              opacity: 0.05,
+                              angleDegrees: -8,
+                              padding: EdgeInsets.all(8),
+                            ),
+                          ),
+                          // Glass blur + content
+                          BackdropFilter(
+                            filter: ImageFilter.blur(sigmaX: 2.5, sigmaY: 2.5),
+                            child: Padding(
+                              padding: const EdgeInsets.all(14),
+                              child: Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  _buildMatchHeader(match),
+                                  const SizedBox(height: 6),
+                                  Row(
+                                    children: [
+                                      Expanded(
+                                        child: Text(
+                                          match.tournamentName,
+                                          maxLines: 1,
+                                          overflow: TextOverflow.ellipsis,
+                                          style: Theme.of(context)
+                                              .textTheme
+                                              .bodyMedium
+                                              ?.copyWith(
+                                            fontWeight: FontWeight.w600,
+                                            color: isDark
+                                                ? Colors.white70
+                                                : Colors.black87,
+                                          ),
+                                        ),
+                                      ),
+                                      const SizedBox(width: 8),
+                                      _chip(
+                                        icon: Icons.schedule,
+                                        label: _formatDate(
+                                          match.matchDate,
+                                          match.matchTime,
+                                        ),
+                                        context: context,
+                                      ),
+                                    ],
+                                  ),
+                                  const SizedBox(height: 10),
+                                  _buildTeamRow(
+                                    match.team1Logo,
+                                    match.team1Name,
+                                    match.team1Runs,
+                                    match.team1Wickets,
+                                    match.team1Overs,
+                                    match.team1Balls,
+                                  ),
+                                  const SizedBox(height: 8),
+                                  _dividerLine(context),
+                                  const SizedBox(height: 8),
+                                  _buildTeamRow(
+                                    match.team2Logo,
+                                    match.team2Name,
+                                    match.team2Runs,
+                                    match.team2Wickets,
+                                    match.team2Overs,
+                                    match.team2Balls,
+                                  ),
+                                  const SizedBox(height: 8),
+                                  if (match.toss.isNotEmpty ||
+                                      match.result.isNotEmpty)
+                                    Flexible(
+                                      fit: FlexFit.loose,
+                                      child: Container(
+                                        width: double.infinity,
+                                        padding: const EdgeInsets.symmetric(
+                                            horizontal: 12, vertical: 8),
+                                        decoration: BoxDecoration(
+                                          borderRadius:
+                                          BorderRadius.circular(14),
+                                          color: (isDark
+                                              ? Colors.white
+                                              : Colors.black)
+                                              .withOpacity(0.03),
+                                          border: Border.all(
+                                            color: isDark
+                                                ? Colors.white12
+                                                : Colors.black12,
+                                          ),
+                                        ),
+                                        child: Column(
+                                          crossAxisAlignment:
+                                          CrossAxisAlignment.start,
+                                          mainAxisSize: MainAxisSize.min,
+                                          children: [
+                                            if (match.toss.isNotEmpty)
+                                              Text(
+                                                match.toss,
+                                                maxLines: 2,
+                                                overflow: TextOverflow.ellipsis,
+                                                style: Theme.of(context)
+                                                    .textTheme
+                                                    .bodySmall
+                                                    ?.copyWith(
+                                                  fontStyle:
+                                                  FontStyle.italic,
+                                                  color: isDark
+                                                      ? Colors.white60
+                                                      : Colors.black87,
+                                                ),
+                                              ),
+                                            if (match.result.isNotEmpty)
+                                              Padding(
+                                                padding: const EdgeInsets.only(
+                                                    top: 2),
+                                                child: Text(
+                                                  match.result,
+                                                  maxLines: 2,
+                                                  overflow:
+                                                  TextOverflow.ellipsis,
+                                                  style: Theme.of(context)
+                                                      .textTheme
+                                                      .bodySmall
+                                                      ?.copyWith(
+                                                    fontWeight:
+                                                    FontWeight.w600,
+                                                    color: isDark
+                                                        ? Colors.white70
+                                                        : null,
+                                                  ),
+                                                ),
+                                              ),
+                                          ],
+                                        ),
+                                      ),
+                                    ),
+                                ],
+                              ),
+                            ),
+                          ),
+                        ],
                       ),
                     ),
                   ),
@@ -186,23 +280,26 @@ class _LiveMatchesSectionState extends State<LiveMatchesSection> {
           controller: _pageController,
           count: min(_matches.length, _visibleCount),
           effect: WormEffect(
-            dotHeight: 10,
-            dotWidth: 10,
+            dotHeight: 8,
+            dotWidth: 8,
             spacing: 6,
-            activeDotColor: isDark ? Colors.white : Colors.blue.shade600,
-            dotColor: isDark ? Colors.grey.shade700 : Colors.grey.shade400,
+            activeDotColor:
+            isDark ? Colors.white : Colors.blue.shade600,
+            dotColor:
+            isDark ? Colors.grey.shade700 : Colors.grey.shade400,
           ),
         ),
       ],
     );
   }
 
+  // ---- helpers ----
   Widget _buildShimmerLoader() {
-    final base = Colors.grey[300]!;
-    final highlight = Colors.grey[100]!;
-
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+    final base = isDark ? Colors.grey[800]! : Colors.grey[300]!;
+    final highlight = isDark ? Colors.grey[700]! : Colors.grey[100]!;
     return SizedBox(
-      height: 240,
+      height: _baseHeight - 20,
       child: ListView.builder(
         scrollDirection: Axis.horizontal,
         itemCount: 3,
@@ -212,8 +309,8 @@ class _LiveMatchesSectionState extends State<LiveMatchesSection> {
             baseColor: base,
             highlightColor: highlight,
             child: Container(
-              width: MediaQuery.of(context).size.width * 0.85,
-              margin: const EdgeInsets.only(right: 12),
+              width: MediaQuery.of(context).size.width * 0.88,
+              margin: const EdgeInsets.only(right: 12, top: 12, bottom: 12),
               decoration: BoxDecoration(
                 color: base,
                 borderRadius: BorderRadius.circular(20),
@@ -226,56 +323,36 @@ class _LiveMatchesSectionState extends State<LiveMatchesSection> {
   }
 
   Widget _buildMatchHeader(MatchModel match) {
+    final isDark = Theme.of(context).brightness == Brightness.dark;
     return Row(
       children: [
         Expanded(
           child: Text(
             match.matchName,
-            style: Theme.of(context).textTheme.titleMedium?.copyWith(
-              fontWeight: FontWeight.bold,
-              fontSize: 16,
-              color: Theme.of(context).brightness == Brightness.dark
-                  ? Colors.white
-                  : Colors.blue.shade800,
-            ),
             maxLines: 1,
             overflow: TextOverflow.ellipsis,
-          ),
-        ),
-        Container(
-          padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
-          decoration: BoxDecoration(
-            color: Colors.redAccent,
-            borderRadius: BorderRadius.circular(20),
-            boxShadow: [
-              BoxShadow(
-                color: Colors.redAccent.withOpacity(0.3),
-                blurRadius: 8,
-                spreadRadius: 1,
-              ),
-            ],
-          ),
-          child: const Text(
-            "LIVE",
-            style: TextStyle(
-              color: Colors.white,
-              fontSize: 11,
-              fontWeight: FontWeight.bold,
+            style: Theme.of(context).textTheme.titleMedium?.copyWith(
+              fontWeight: FontWeight.w800,
+              fontSize: 16,
+              color: isDark ? Colors.white : Colors.blue.shade800,
             ),
           ),
         ),
+        const SizedBox(width: 8),
+        // 🔴 Replaces old gradient chip with animated badge
+        const LiveBadge(),
       ],
     );
   }
 
   Widget _buildTeamRow(
-    String logo,
-    String name,
-    int runs,
-    int wickets,
-    int overs,
-    int balls,
-  ) {
+      String logo,
+      String name,
+      int runs,
+      int wickets,
+      int overs,
+      int balls,
+      ) {
     final isDark = Theme.of(context).brightness == Brightness.dark;
     return Row(
       children: [
@@ -284,57 +361,164 @@ class _LiveMatchesSectionState extends State<LiveMatchesSection> {
         Expanded(
           child: Text(
             name,
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
             style: Theme.of(context).textTheme.bodyLarge?.copyWith(
-              fontWeight: FontWeight.w600,
+              fontWeight: FontWeight.w700,
               color: isDark ? Colors.white : Colors.black87,
             ),
           ),
         ),
-        Text(
-          "$runs/$wickets",
-          style: Theme.of(context).textTheme.titleSmall?.copyWith(
-            fontWeight: FontWeight.bold,
-            color: isDark ? Colors.white : null,
-          ),
-        ),
-        const SizedBox(width: 6),
-        Text(
-          "($overs.$balls)",
-          style: Theme.of(context).textTheme.labelSmall?.copyWith(
-            color: isDark ? Colors.grey[400] : Colors.grey,
-          ),
-        ),
+        _scoreChip("$runs/$wickets", context),
+        const SizedBox(width: 8),
+        _oversChip("($overs.$balls)", context),
       ],
     );
   }
 
   Widget _teamLogo(String url, String name) {
-    if (url.isNotEmpty) {
-      return CircleAvatar(
-        radius: 18,
-        backgroundColor: Colors.white,
-        backgroundImage: NetworkImage(url),
-      );
-    }
     final initials = name
         .split(' ')
         .where((e) => e.isNotEmpty)
         .map((e) => e[0])
         .join()
         .toUpperCase();
-    final bgColor = _getRandomColor(name);
+
+    if (url.isNotEmpty) {
+      return Container(
+        width: 36,
+        height: 36,
+        decoration: BoxDecoration(
+          shape: BoxShape.circle,
+          border: Border.all(color: Colors.white.withOpacity(0.65), width: 1),
+          boxShadow: [
+            BoxShadow(
+              color: Colors.black.withOpacity(0.12),
+              blurRadius: 6,
+              offset: const Offset(0, 2),
+            )
+          ],
+        ),
+        child: ClipOval(
+          child: Image.network(
+            url,
+            fit: BoxFit.cover,
+            errorBuilder: (_, __, ___) => _avatarFallback(initials, name),
+          ),
+        ),
+      );
+    }
+    return _avatarFallback(initials, name);
+  }
+
+  Widget _avatarFallback(String initials, String seed) {
+    final bgColor = _getRandomColor(seed);
     return CircleAvatar(
       radius: 18,
       backgroundColor: bgColor,
       child: Text(
-        initials.length > 4 ? initials.substring(0, 4) : initials,
+        (initials.length > 3 ? initials.substring(0, 3) : initials),
         style: const TextStyle(
           color: Colors.white,
-          fontSize: 10,
+          fontSize: 11,
           fontWeight: FontWeight.bold,
           shadows: [
-            Shadow(color: Colors.black26, offset: Offset(0, 1), blurRadius: 1),
+            Shadow(color: Colors.black26, offset: Offset(0, 1), blurRadius: 1)
           ],
+        ),
+      ),
+    );
+  }
+
+  Widget _chip({
+    required IconData icon,
+    required String label,
+    required BuildContext context,
+  }) {
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+      decoration: BoxDecoration(
+        color:
+        isDark ? Colors.white.withOpacity(0.06) : Colors.black.withOpacity(0.04),
+        borderRadius: BorderRadius.circular(20),
+        border: Border.all(color: isDark ? Colors.white12 : Colors.black12),
+      ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Icon(icon, size: 14, color: isDark ? Colors.white70 : Colors.black54),
+          const SizedBox(width: 6),
+          Text(
+            label,
+            style: TextStyle(
+              fontSize: 12,
+              color: isDark ? Colors.white70 : Colors.black87,
+              fontWeight: FontWeight.w500,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _scoreChip(String text, BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+      decoration: BoxDecoration(
+        borderRadius: BorderRadius.circular(14),
+        gradient: LinearGradient(
+          colors: [
+            Theme.of(context).colorScheme.primary.withOpacity(0.14),
+            Theme.of(context).colorScheme.primary.withOpacity(0.06),
+          ],
+          begin: Alignment.topLeft,
+          end: Alignment.bottomRight,
+        ),
+        border: Border.all(
+          color: Theme.of(context).brightness == Brightness.dark
+              ? Colors.white12
+              : Colors.blue.withOpacity(0.25),
+        ),
+      ),
+      child: Text(
+        text,
+        style: Theme.of(context).textTheme.titleSmall?.copyWith(
+          fontWeight: FontWeight.w700,
+        ),
+      ),
+    );
+  }
+
+  Widget _oversChip(String text, BuildContext context) {
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 6),
+      decoration: BoxDecoration(
+        borderRadius: BorderRadius.circular(14),
+        color:
+        isDark ? Colors.white.withOpacity(0.06) : Colors.black.withOpacity(0.04),
+        border: Border.all(color: isDark ? Colors.white12 : Colors.black12),
+      ),
+      child: Text(
+        text,
+        style: Theme.of(context).textTheme.labelSmall?.copyWith(
+          fontWeight: FontWeight.w600,
+          color: isDark ? Colors.white70 : Colors.black87,
+        ),
+      ),
+    );
+  }
+
+  Widget _dividerLine(BuildContext context) {
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+    return Container(
+      height: 1,
+      decoration: BoxDecoration(
+        gradient: LinearGradient(
+          colors: isDark
+              ? [Colors.white12, Colors.white24, Colors.white12]
+              : [Colors.black12, Colors.black26, Colors.black12],
         ),
       ),
     );
@@ -342,9 +526,8 @@ class _LiveMatchesSectionState extends State<LiveMatchesSection> {
 
   String _formatDate(String date, String time) {
     try {
-      final matchDateTime = DateFormat(
-        'yyyy-MM-dd HH:mm:ss',
-      ).parse('$date $time');
+      final matchDateTime =
+      DateFormat('yyyy-MM-dd HH:mm:ss').parse('$date $time');
       return DateFormat('dd MMM yyyy, hh:mm a').format(matchDateTime);
     } catch (_) {
       return "$date $time";

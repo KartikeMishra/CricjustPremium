@@ -36,9 +36,13 @@ dependencies:
   share_plus: ^7.0.2
   fl_chart: ^0.66.2
   image_cropper:
-
-
-
+  audioplayers: ^5.2.0
+  confetti: ^0.7.0
+  crypto: ^3.0.3
+  youtube_player_iframe: ^5.0.0
+  qr_flutter: ^4.1.0
+  mobile_scanner: ^6.0.2
+  material_symbols_icons: ^4.2719.0
   # Storage for Offline Scoring
   hive: ^2.2.3
   hive_flutter: ^1.1.0
@@ -66,6 +70,7 @@ flutter:
     - lib/asset/images/Random_Image.png
     - lib/asset/images/Theme1.png
     - lib/asset/images/tv_bg.png
+    - lib/asset/images/stadium_header.jpg
 
 flutter_launcher_icons:
   android: true

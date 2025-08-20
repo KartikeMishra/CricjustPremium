@@ -65,24 +65,37 @@ class MatchSquadService {
   }
 }
 
+
 class MatchStatsService {
   static Future<MatchStats> fetchStats(int matchId) async {
     final uri = Uri.parse(
       'https://cricjust.in/wp-json/custom-api-for-cricket/get-match'
-      '?match_id=$matchId&type=stats&user_ip=123456789',
+          '?match_id=$matchId&type=stats&user_ip=123456789',
     );
 
-    final response = await http.get(uri);
-    if (response.statusCode != 200) {
-      throw Exception('Failed to load stats (HTTP ${response.statusCode})');
+    final resp = await http.get(uri);
+
+    if (resp.statusCode != 200) {
+      // real transport/server problem – let UI show an error
+      throw Exception('Failed to load stats (HTTP ${resp.statusCode})');
     }
 
-    final Map<String, dynamic> body = json.decode(response.body);
-    if (body['status'] != 1) {
-      throw Exception('API returned status=${body['status']}');
+    final dynamic raw = json.decode(resp.body);
+
+    // If API returns a list or a map with status 0 / missing stats, treat as "no data"
+    if (raw is List) return MatchStats.empty();
+    if (raw is Map) {
+      final status = raw['status'];
+      final hasStats = (raw['stats'] != null) ||
+          (raw['data'] is Map && (raw['data']['stats'] != null));
+      if (status == 0 || !hasStats) return MatchStats.empty();
+
+      // Pass whole payload; model handles different shapes/keys.
+      return MatchStats.fromJson(raw); // delegates to fromAny in the model
     }
 
-    // ⚠️ Pass the full JSON—so MatchStats.fromJson can see "stats"
-    return MatchStats.fromJson(body);
+    // Unknown shape – safest fallback
+    return MatchStats.empty();
   }
 }
+

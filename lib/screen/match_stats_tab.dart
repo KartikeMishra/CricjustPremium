@@ -17,11 +17,17 @@ class MatchStatsTab extends StatefulWidget {
   });
 
   @override
-  _MatchStatsTabState createState() => _MatchStatsTabState();
+  State<MatchStatsTab> createState() => _MatchStatsTabState();
 }
 
 class _MatchStatsTabState extends State<MatchStatsTab> {
   late Future<MatchStats> _statsFuture;
+
+  // consistent team colors (dark/light friendly)
+  Color get _t1 => Colors.blue;
+  Color get _t1Light => Colors.lightBlueAccent;
+  Color get _t2 => Colors.orange;
+  Color get _t2Light => Colors.deepOrangeAccent;
 
   @override
   void initState() {
@@ -29,12 +35,18 @@ class _MatchStatsTabState extends State<MatchStatsTab> {
     _statsFuture = MatchStatsService.fetchStats(widget.matchId);
   }
 
+  Future<void> _refresh() async {
+    setState(() {
+      _statsFuture = MatchStatsService.fetchStats(widget.matchId);
+    });
+  }
+
   @override
   Widget build(BuildContext context) {
     final isDark = Theme.of(context).brightness == Brightness.dark;
     final textColor = isDark ? Colors.white70 : Colors.black87;
     final gridColor = isDark ? Colors.white12 : Colors.grey.shade300;
-    final cardBg = isDark ? Colors.grey[900]! : Colors.white; // ✅ fixed here
+    final cardBg = isDark ? Colors.grey[900]! : Colors.white;
 
     return FutureBuilder<MatchStats>(
       future: _statsFuture,
@@ -46,52 +58,55 @@ class _MatchStatsTabState extends State<MatchStatsTab> {
           return _buildNoData('Error: ${snap.error}');
         }
         final stats = snap.data!;
-        return ListView(
-          padding: const EdgeInsets.all(16),
-          children: [
-            _buildSection(
-              title: 'Manhattan (Per-Over Runs)',
-              showLegend: true,
-              legend: _buildLegend(textColor),
-              hasData:
-                  stats.manhattanTeam1.isNotEmpty ||
-                  stats.manhattanTeam2.isNotEmpty,
-              child: _buildManhattanChart(stats, textColor, gridColor),
-              cardBg: cardBg,
-            ),
-            const SizedBox(height: 24),
-            _buildSection(
-              title: 'Worm (Cumulative Runs)',
-              showLegend: true,
-              legend: _buildLegend(textColor),
-              hasData: stats.wormTeam1.isNotEmpty || stats.wormTeam2.isNotEmpty,
-              child: _buildWormChart(stats, textColor, gridColor),
-              height: 260,
-              cardBg: cardBg,
-            ),
-            const SizedBox(height: 24),
-            _buildSection(
-              title: 'Run Types',
-              showLegend: true,
-              legend: _buildLegend(textColor),
-              hasData: !_isRunTypesEmpty(stats),
-              child: _buildRunTypeChart(stats, textColor, gridColor),
-              cardBg: cardBg,
-            ),
-            const SizedBox(height: 24),
-            _buildSection(
-              title: 'Wicket Types',
-              showLegend: false,
-              hasData: stats.wicketTypes.isNotEmpty,
-              child: _buildWicketChart(stats, textColor),
-              height: 280,
-              cardBg: cardBg,
-            ),
-          ],
+
+        return RefreshIndicator(
+          onRefresh: _refresh,
+          child: ListView(
+            padding: const EdgeInsets.all(16),
+            children: [
+              _buildSection(
+                title: 'Manhattan (Per-Over Runs)',
+                legend: _buildLegend(textColor),
+                hasData:
+                stats.manhattanTeam1.isNotEmpty ||
+                    stats.manhattanTeam2.isNotEmpty,
+                cardBg: cardBg,
+                child: _buildManhattanChart(stats, textColor, gridColor),
+              ),
+              const SizedBox(height: 24),
+              _buildSection(
+                title: 'Worm (Cumulative Runs)',
+                legend: _buildLegend(textColor),
+                hasData: stats.wormTeam1.isNotEmpty ||
+                    stats.wormTeam2.isNotEmpty,
+                height: 260,
+                cardBg: cardBg,
+                child: _buildWormChart(stats, textColor, gridColor),
+              ),
+              const SizedBox(height: 24),
+              _buildSection(
+                title: 'Run Types',
+                legend: _buildLegend(textColor),
+                hasData: !_isRunTypesEmpty(stats),
+                cardBg: cardBg,
+                child: _buildRunTypeChart(stats, textColor, gridColor),
+              ),
+              const SizedBox(height: 24),
+              _buildSection(
+                title: 'Wicket Types',
+                hasData: stats.wicketTypes.isNotEmpty,
+                height: 300,
+                cardBg: cardBg,
+                child: _buildWicketChart(stats, textColor),
+              ),
+            ],
+          ),
         );
       },
     );
   }
+
+  // ---------- Section ----------
 
   Widget _buildSection({
     required String title,
@@ -99,17 +114,16 @@ class _MatchStatsTabState extends State<MatchStatsTab> {
     required Widget child,
     required Color cardBg,
     double height = 240,
-    bool showLegend = false,
     Widget? legend,
   }) {
+    final titleStyle =
+    const TextStyle(fontSize: 18, fontWeight: FontWeight.w700);
+
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        Text(
-          title,
-          style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
-        ),
-        if (showLegend && legend != null) ...[
+        Text(title, style: titleStyle),
+        if (legend != null) ...[
           const SizedBox(height: 8),
           legend,
         ],
@@ -117,21 +131,19 @@ class _MatchStatsTabState extends State<MatchStatsTab> {
         SizedBox(
           height: height,
           child: Card(
+            clipBehavior: Clip.antiAlias,
             color: cardBg,
             elevation: 4,
-            shape: RoundedRectangleBorder(
-              borderRadius: BorderRadius.circular(12),
-            ),
+            shape:
+            RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
             child: Padding(
               padding: const EdgeInsets.all(16),
               child: hasData
                   ? child
-                  : Center(
-                      child: Text(
-                        'No data',
-                        style: TextStyle(color: Colors.grey),
-                      ),
-                    ),
+                  : const Center(
+                child:
+                Text('No data', style: TextStyle(color: Colors.grey)),
+              ),
             ),
           ),
         ),
@@ -140,50 +152,107 @@ class _MatchStatsTabState extends State<MatchStatsTab> {
   }
 
   Widget _buildLegend(Color textColor) {
-    return Row(
-      mainAxisAlignment: MainAxisAlignment.center,
-      children: [
-        _legendItem(widget.team1Name, Colors.blue, textColor),
-        const SizedBox(width: 24),
-        _legendItem(widget.team2Name, Colors.orange, textColor),
-      ],
+    return LayoutBuilder(
+      builder: (context, c) {
+        return Wrap(
+          alignment: WrapAlignment.center,
+          spacing: 12,
+          runSpacing: 8,
+          children: [
+            _legendItem(widget.team1Name, _t1, textColor, c.maxWidth),
+            _legendItem(widget.team2Name, _t2, textColor, c.maxWidth),
+          ],
+        );
+      },
     );
   }
 
-  Widget _legendItem(String label, Color color, Color textColor) => Row(
-    children: [
-      Container(
-        width: 14,
-        height: 14,
+  Widget _legendItem(String label, Color color, Color textColor, double maxW) {
+    final name = (label.isEmpty) ? 'Team' : label;
+    // cap each chip so two can fit side-by-side; fall back to 80% if space is tight
+    final cap = maxW >= 360 ? maxW * 0.44 : maxW * 0.8;
+
+    return ConstrainedBox(
+      constraints: BoxConstraints(maxWidth: cap),
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
         decoration: BoxDecoration(
-          color: color,
-          borderRadius: BorderRadius.circular(4),
+          color: color.withOpacity(.12),
+          borderRadius: BorderRadius.circular(12),
+        ),
+        child: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Container(
+              width: 12, height: 12,
+              decoration: BoxDecoration(color: color, borderRadius: BorderRadius.circular(3)),
+            ),
+            const SizedBox(width: 8),
+            Flexible(
+              child: Text(
+                name,
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                style: TextStyle(fontSize: 13, color: textColor),
+                softWrap: false,
+              ),
+            ),
+          ],
         ),
       ),
-      const SizedBox(width: 6),
-      Text(label, style: TextStyle(fontSize: 13, color: textColor)),
-    ],
-  );
+    );
+  }
+
+
+  // ---------- Helpers ----------
 
   bool _isRunTypesEmpty(MatchStats s) =>
       (s.runTypesTeam1.ones +
-              s.runTypesTeam1.twos +
-              s.runTypesTeam1.fours +
-              s.runTypesTeam1.sixes +
-              s.runTypesTeam1.extras ==
+          s.runTypesTeam1.twos +
+          s.runTypesTeam1.fours +
+          s.runTypesTeam1.sixes +
+          s.runTypesTeam1.extras ==
           0) &&
-      (s.runTypesTeam2.ones +
+          (s.runTypesTeam2.ones +
               s.runTypesTeam2.twos +
               s.runTypesTeam2.fours +
               s.runTypesTeam2.sixes +
               s.runTypesTeam2.extras ==
-          0);
+              0);
+
+  double _maxY(Iterable<double> values) {
+    final m = values.isEmpty ? 0 : values.reduce(max);
+    if (m == 0) return 6; // small headroom base
+    return (m * 1.15).ceilToDouble(); // 15% headroom
+  }
+
+  // ---------- Charts ----------
 
   Widget _buildManhattanChart(MatchStats s, Color textColor, Color gridColor) {
     final maxOvers = max(s.manhattanTeam1.length, s.manhattanTeam2.length);
+
+    final allY = <double>[
+      ...s.manhattanTeam1.map((e) => e.totalRuns.toDouble()),
+      ...s.manhattanTeam2.map((e) => e.totalRuns.toDouble()),
+    ];
+    final maxY = _maxY(allY);
+
     return BarChart(
       BarChartData(
+        minY: 0,
+        maxY: maxY,
+        barTouchData: BarTouchData(
+          enabled: true,
+          touchTooltipData: BarTouchTooltipData(
+            tooltipBgColor: Colors.black.withOpacity(.75),
+            getTooltipItem: (group, _, rod, __) => BarTooltipItem(
+              'Over ${group.x}\n${rod.toY.toInt()} runs',
+              const TextStyle(color: Colors.white, fontWeight: FontWeight.w600),
+            ),
+          ),
+        ),
         alignment: BarChartAlignment.spaceBetween,
+        groupsSpace: 8,
         barGroups: List.generate(maxOvers, (i) {
           final y1 = i < s.manhattanTeam1.length
               ? s.manhattanTeam1[i].totalRuns.toDouble()
@@ -193,9 +262,10 @@ class _MatchStatsTabState extends State<MatchStatsTab> {
               : 0.0;
           return BarChartGroupData(
             x: i + 1,
+            barsSpace: 6,
             barRods: [
-              BarChartRodData(toY: y1, width: 8, color: Colors.blue),
-              BarChartRodData(toY: y2, width: 8, color: Colors.orange),
+              BarChartRodData(toY: y1, width: 9, color: _t1),
+              BarChartRodData(toY: y2, width: 9, color: _t2),
             ],
           );
         }),
@@ -203,7 +273,7 @@ class _MatchStatsTabState extends State<MatchStatsTab> {
           show: true,
           drawVerticalLine: false,
           getDrawingHorizontalLine: (y) =>
-              FlLine(color: gridColor, strokeWidth: y == 0 ? 1.2 : 0.6),
+              FlLine(color: gridColor, strokeWidth: 0.6),
         ),
         titlesData: FlTitlesData(
           bottomTitles: AxisTitles(
@@ -214,10 +284,8 @@ class _MatchStatsTabState extends State<MatchStatsTab> {
                 width: 24,
                 child: Transform.rotate(
                   angle: -pi / 4,
-                  child: Text(
-                    '${value.toInt()}',
-                    style: TextStyle(fontSize: 10, color: textColor),
-                  ),
+                  child: Text('${value.toInt()}',
+                      style: TextStyle(fontSize: 10, color: textColor)),
                 ),
               ),
             ),
@@ -225,23 +293,37 @@ class _MatchStatsTabState extends State<MatchStatsTab> {
           leftTitles: AxisTitles(
             sideTitles: SideTitles(
               showTitles: true,
-              getTitlesWidget: (v, _) => Text(
-                '${v.toInt()}',
-                style: TextStyle(fontSize: 10, color: textColor),
-              ),
+              reservedSize: 28,
+              getTitlesWidget: (v, _) => Text('${v.toInt()}',
+                  style: TextStyle(fontSize: 10, color: textColor)),
             ),
           ),
-          topTitles: AxisTitles(sideTitles: SideTitles(showTitles: false)),
-          rightTitles: AxisTitles(sideTitles: SideTitles(showTitles: false)),
+          topTitles: const AxisTitles(sideTitles: SideTitles(showTitles: false)),
+          rightTitles:
+          const AxisTitles(sideTitles: SideTitles(showTitles: false)),
         ),
+        borderData: FlBorderData(show: false),
       ),
     );
   }
 
   Widget _buildWormChart(MatchStats s, Color textColor, Color gridColor) {
+    final allY = <double>[
+      ...s.wormTeam1.map((e) => e.totalRuns.toDouble()),
+      ...s.wormTeam2.map((e) => e.totalRuns.toDouble()),
+    ];
+    final maxY = _maxY(allY);
+
     return LineChart(
       LineChartData(
-        lineTouchData: LineTouchData(enabled: true),
+        minY: 0,
+        maxY: maxY,
+        lineTouchData: LineTouchData(
+          enabled: true,
+          touchTooltipData: LineTouchTooltipData(
+            tooltipBgColor: Colors.black.withOpacity(.75),
+          ),
+        ),
         gridData: FlGridData(
           show: true,
           drawVerticalLine: false,
@@ -249,34 +331,6 @@ class _MatchStatsTabState extends State<MatchStatsTab> {
               FlLine(color: gridColor, strokeWidth: 0.8),
         ),
         borderData: FlBorderData(show: false),
-        lineBarsData: [
-          LineChartBarData(
-            spots: s.wormTeam1
-                .map(
-                  (e) =>
-                      FlSpot(e.overNumber.toDouble(), e.totalRuns.toDouble()),
-                )
-                .toList(),
-            isCurved: true,
-            gradient: const LinearGradient(
-              colors: [Colors.blue, Colors.lightBlueAccent],
-            ),
-            dotData: FlDotData(show: false),
-          ),
-          LineChartBarData(
-            spots: s.wormTeam2
-                .map(
-                  (e) =>
-                      FlSpot(e.overNumber.toDouble(), e.totalRuns.toDouble()),
-                )
-                .toList(),
-            isCurved: true,
-            gradient: const LinearGradient(
-              colors: [Colors.orange, Colors.deepOrangeAccent],
-            ),
-            dotData: FlDotData(show: false),
-          ),
-        ],
         titlesData: FlTitlesData(
           bottomTitles: AxisTitles(
             sideTitles: SideTitles(
@@ -286,10 +340,8 @@ class _MatchStatsTabState extends State<MatchStatsTab> {
                 width: 24,
                 child: Transform.rotate(
                   angle: -pi / 4,
-                  child: Text(
-                    '${value.toInt()}',
-                    style: TextStyle(fontSize: 10, color: textColor),
-                  ),
+                  child: Text('${value.toInt()}',
+                      style: TextStyle(fontSize: 10, color: textColor)),
                 ),
               ),
             ),
@@ -297,15 +349,55 @@ class _MatchStatsTabState extends State<MatchStatsTab> {
           leftTitles: AxisTitles(
             sideTitles: SideTitles(
               showTitles: true,
-              getTitlesWidget: (v, _) => Text(
-                '${v.toInt()}',
-                style: TextStyle(fontSize: 10, color: textColor),
-              ),
+              reservedSize: 28,
+              getTitlesWidget: (v, _) => Text('${v.toInt()}',
+                  style: TextStyle(fontSize: 10, color: textColor)),
             ),
           ),
-          topTitles: AxisTitles(sideTitles: SideTitles(showTitles: false)),
-          rightTitles: AxisTitles(sideTitles: SideTitles(showTitles: false)),
+          topTitles: const AxisTitles(sideTitles: SideTitles(showTitles: false)),
+          rightTitles:
+          const AxisTitles(sideTitles: SideTitles(showTitles: false)),
         ),
+        lineBarsData: [
+          LineChartBarData(
+            spots: s.wormTeam1
+                .map((e) => FlSpot(
+              e.overNumber.toDouble(),
+              e.totalRuns.toDouble(),
+            ))
+                .toList(),
+            isCurved: true,
+            gradient: LinearGradient(colors: [_t1, _t1Light]),
+            belowBarData: BarAreaData(
+              show: true,
+              gradient: LinearGradient(
+                colors: [_t1.withOpacity(.18), _t1Light.withOpacity(.05)],
+                begin: Alignment.topCenter,
+                end: Alignment.bottomCenter,
+              ),
+            ),
+            dotData: const FlDotData(show: false),
+          ),
+          LineChartBarData(
+            spots: s.wormTeam2
+                .map((e) => FlSpot(
+              e.overNumber.toDouble(),
+              e.totalRuns.toDouble(),
+            ))
+                .toList(),
+            isCurved: true,
+            gradient: LinearGradient(colors: [_t2, _t2Light]),
+            belowBarData: BarAreaData(
+              show: true,
+              gradient: LinearGradient(
+                colors: [_t2.withOpacity(.18), _t2Light.withOpacity(.05)],
+                begin: Alignment.topCenter,
+                end: Alignment.bottomCenter,
+              ),
+            ),
+            dotData: const FlDotData(show: false),
+          ),
+        ],
       ),
     );
   }
@@ -327,15 +419,31 @@ class _MatchStatsTabState extends State<MatchStatsTab> {
       s.runTypesTeam2.extras,
     ].map((v) => v.toDouble()).toList();
 
+    final allY = <double>[...t1, ...t2];
+    final maxY = _maxY(allY);
+
     return BarChart(
       BarChartData(
+        minY: 0,
+        maxY: maxY,
+        barTouchData: BarTouchData(
+          enabled: true,
+          touchTooltipData: BarTouchTooltipData(
+            tooltipBgColor: Colors.black.withOpacity(.75),
+            getTooltipItem: (group, _, rod, __) => BarTooltipItem(
+              '${labels[group.x]} • ${rod.color == _t1 ? widget.team1Name : widget.team2Name}\n${rod.toY.toInt()}',
+              const TextStyle(color: Colors.white, fontWeight: FontWeight.w600),
+            ),
+          ),
+        ),
         alignment: BarChartAlignment.spaceAround,
         barGroups: List.generate(labels.length, (i) {
           return BarChartGroupData(
             x: i,
+            barsSpace: 8,
             barRods: [
-              BarChartRodData(toY: t1[i], width: 10, color: Colors.blue),
-              BarChartRodData(toY: t2[i], width: 10, color: Colors.orange),
+              BarChartRodData(toY: t1[i], width: 10, color: _t1),
+              BarChartRodData(toY: t2[i], width: 10, color: _t2),
             ],
           );
         }),
@@ -354,10 +462,8 @@ class _MatchStatsTabState extends State<MatchStatsTab> {
                 width: 28,
                 child: Transform.rotate(
                   angle: -pi / 4,
-                  child: Text(
-                    labels[v.toInt()],
-                    style: TextStyle(fontSize: 10, color: textColor),
-                  ),
+                  child: Text(labels[v.toInt()],
+                      style: TextStyle(fontSize: 10, color: textColor)),
                 ),
               ),
             ),
@@ -365,40 +471,51 @@ class _MatchStatsTabState extends State<MatchStatsTab> {
           leftTitles: AxisTitles(
             sideTitles: SideTitles(
               showTitles: true,
-              getTitlesWidget: (v, _) => Text(
-                '${v.toInt()}',
-                style: TextStyle(fontSize: 10, color: textColor),
-              ),
+              reservedSize: 28,
+              getTitlesWidget: (v, _) => Text('${v.toInt()}',
+                  style: TextStyle(fontSize: 10, color: textColor)),
             ),
           ),
-          topTitles: AxisTitles(sideTitles: SideTitles(showTitles: false)),
-          rightTitles: AxisTitles(sideTitles: SideTitles(showTitles: false)),
+          topTitles: const AxisTitles(sideTitles: SideTitles(showTitles: false)),
+          rightTitles:
+          const AxisTitles(sideTitles: SideTitles(showTitles: false)),
         ),
+        borderData: FlBorderData(show: false),
       ),
     );
   }
 
   Widget _buildWicketChart(MatchStats s, Color textColor) {
+    if (s.wicketTypes.isEmpty) {
+      return const SizedBox.shrink();
+    }
     const colors = [
       Colors.red,
       Colors.green,
       Colors.purple,
       Colors.teal,
       Colors.amber,
+      Colors.indigo,
+      Colors.cyan,
     ];
+
+    final total = s.wicketTypes.fold<int>(0, (a, w) => a + w.totalWickets);
+
     return Column(
       children: [
         SizedBox(
-          height: 180,
+          height: 190,
           child: PieChart(
             PieChartData(
+              sectionsSpace: 2,
+              centerSpaceRadius: 42,
               sections: List.generate(s.wicketTypes.length, (i) {
                 final w = s.wicketTypes[i];
                 return PieChartSectionData(
                   color: colors[i % colors.length],
                   value: w.totalWickets.toDouble(),
                   title: '${w.totalWickets}',
-                  radius: 50,
+                  radius: 56,
                   titleStyle: const TextStyle(
                     fontSize: 12,
                     fontWeight: FontWeight.bold,
@@ -406,55 +523,67 @@ class _MatchStatsTabState extends State<MatchStatsTab> {
                   ),
                 );
               }),
-              sectionsSpace: 2,
-              centerSpaceRadius: 30,
             ),
           ),
         ),
-        const SizedBox(height: 12),
+        Text('Total Wickets: $total',
+            style: const TextStyle(fontWeight: FontWeight.w700)),
+        const SizedBox(height: 10),
         Wrap(
           spacing: 16,
           runSpacing: 8,
+          alignment: WrapAlignment.center,
           children: List.generate(s.wicketTypes.length, (i) {
             final w = s.wicketTypes[i];
+// in the Wrap children builder:
             return Row(
               mainAxisSize: MainAxisSize.min,
               children: [
                 Container(
-                  width: 14,
-                  height: 14,
+                  width: 14, height: 14,
                   decoration: BoxDecoration(
                     color: colors[i % colors.length],
                     borderRadius: BorderRadius.circular(4),
                   ),
                 ),
                 const SizedBox(width: 6),
-                Text(
-                  w.wicketType,
-                  style: TextStyle(fontSize: 12, color: textColor),
+                Flexible( // <-- add Flexible so long text can shrink
+                  child: Text(
+                    w.wicketType,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: TextStyle(fontSize: 12, color: textColor),
+                    softWrap: false,
+                  ),
                 ),
               ],
             );
+
           }),
         ),
       ],
     );
   }
 
+  // ---------- Empty state ----------
+
   Widget _buildNoData(String msg) {
+    final isDark = Theme.of(context).brightness == Brightness.dark;
     return Center(
       child: Padding(
-        padding: const EdgeInsets.symmetric(vertical: 32),
+        padding: const EdgeInsets.symmetric(vertical: 32, horizontal: 16),
         child: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
-            const Icon(Icons.info_outline, size: 80, color: Colors.grey),
+            Icon(Icons.insights_outlined,
+                size: 80, color: isDark ? Colors.grey[600] : Colors.grey),
             const SizedBox(height: 12),
-            Text(
-              msg,
-              textAlign: TextAlign.center,
-              style: const TextStyle(fontSize: 16),
-            ),
+            Text(msg,
+                textAlign: TextAlign.center,
+                style: TextStyle(
+                  fontSize: 16,
+                  color: isDark ? Colors.white70 : Colors.black87,
+                )),
           ],
         ),
       ),

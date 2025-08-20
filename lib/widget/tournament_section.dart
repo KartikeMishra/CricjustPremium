@@ -8,7 +8,7 @@ import '../service/tournament_service.dart';
 import '../theme/color.dart';
 
 class TournamentSection extends StatefulWidget {
-  final String type;
+  final String type; // 'live' | 'upcoming' | 'recent'
   final int limit;
   final void Function(int tournamentId)? onTournamentTap;
   final void Function(bool hasData)? onDataLoaded;
@@ -62,6 +62,19 @@ class _TournamentSectionState extends State<TournamentSection> {
     super.dispose();
   }
 
+  Color get _badgeColor {
+    switch (widget.type.toLowerCase()) {
+      case 'live':
+        return Colors.redAccent;
+      case 'upcoming':
+        return Colors.teal;
+      case 'recent':
+        return Colors.deepPurple;
+      default:
+        return AppColors.primary;
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     if (_isLoading) return _buildShimmerLoader();
@@ -74,122 +87,116 @@ class _TournamentSectionState extends State<TournamentSection> {
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         SizedBox(
-          height: 180,
+          height: 190, // a touch taller for consistent spacing
           child: PageView.builder(
             controller: _pageController,
             itemCount: _tournaments.length,
+            physics: const BouncingScrollPhysics(),
             itemBuilder: (context, index) {
-              final tournament = _tournaments[index];
+              final t = _tournaments[index];
               return GestureDetector(
-                onTap: () =>
-                    widget.onTournamentTap?.call(tournament.tournamentId),
+                onTap: () => widget.onTournamentTap?.call(t.tournamentId),
                 child: AnimatedContainer(
-                  duration: const Duration(milliseconds: 300),
-                  margin: const EdgeInsets.symmetric(
-                    horizontal: 10,
-                    vertical: 8,
-                  ),
+                  duration: const Duration(milliseconds: 250),
+                  margin: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
                   decoration: BoxDecoration(
-                    color: isDark ? const Color(0xFF2A2A2A) : Colors.white,
                     borderRadius: BorderRadius.circular(20),
-                    boxShadow: [
-                      BoxShadow(
-                        color: isDark
-                            ? Colors.black.withOpacity(0.4)
-                            : Colors.blue.withOpacity(0.08),
-                        blurRadius: 12,
-                        offset: const Offset(0, 4),
-                      ),
-                    ],
+                    color: isDark ? const Color(0xFF1E1E1E) : Colors.white,
                     gradient: isDark
                         ? null
                         : const LinearGradient(
-                            colors: [Color(0xFFF0F8FF), Colors.white],
-                            begin: Alignment.topLeft,
-                            end: Alignment.bottomRight,
-                          ),
+                      colors: [Color(0xFFF0F8FF), Colors.white],
+                      begin: Alignment.topLeft,
+                      end: Alignment.bottomRight,
+                    ),
+                    boxShadow: isDark
+                        ? [
+                      BoxShadow(
+                        color: Colors.black.withOpacity(0.35),
+                        blurRadius: 12,
+                        offset: const Offset(0, 6),
+                      ),
+                    ]
+                        : [
+                      BoxShadow(
+                        color: AppColors.primary.withOpacity(0.08),
+                        blurRadius: 14,
+                        offset: const Offset(0, 6),
+                      ),
+                    ],
                   ),
                   child: ClipRRect(
                     borderRadius: BorderRadius.circular(20),
-                    child: BackdropFilter(
-                      filter: ImageFilter.blur(sigmaX: 1.5, sigmaY: 1.5),
-                      child: Padding(
-                        padding: const EdgeInsets.all(14),
-                        child: Row(
-                          children: [
-                            ClipRRect(
-                              borderRadius: BorderRadius.circular(12),
-                              child: tournament.tournamentLogo.isNotEmpty
-                                  ? Image.network(
-                                      tournament.tournamentLogo,
-                                      width: 64,
-                                      height: 64,
-                                      fit: BoxFit.cover,
-                                      errorBuilder: (_, __, ___) => const Icon(
-                                        Icons.broken_image,
-                                        size: 64,
-                                      ),
-                                    )
-                                  : Container(
-                                      width: 64,
-                                      height: 64,
-                                      color: isDark
-                                          ? const Color(0xFF3A3A3A)
-                                          : Colors.grey.shade200,
-                                      child: const Icon(
-                                        Icons.image_not_supported,
-                                        color: Colors.grey,
-                                      ),
-                                    ),
-                            ),
-                            const SizedBox(width: 14),
-                            Expanded(
-                              child: Column(
-                                crossAxisAlignment: CrossAxisAlignment.start,
-                                mainAxisAlignment: MainAxisAlignment.center,
-                                children: [
-                                  Text(
-                                    tournament.tournamentName,
-                                    style: theme.textTheme.titleMedium
-                                        ?.copyWith(
-                                          fontWeight: FontWeight.w600,
-                                          fontSize: 16,
-                                          color: isDark
-                                              ? Colors.white
-                                              : Colors.blue.shade900,
-                                        ),
-                                    maxLines: 1,
-                                    overflow: TextOverflow.ellipsis,
-                                  ),
-                                  const SizedBox(height: 4),
-                                  if (tournament.tournamentDesc.isNotEmpty)
-                                    Text(
-                                      tournament.tournamentDesc,
-                                      style: theme.textTheme.bodySmall
-                                          ?.copyWith(
-                                            color: isDark
-                                                ? Colors.grey[400]
-                                                : Colors.grey[700],
+                    child: Stack(
+                      children: [
+                        // subtle glass
+                        BackdropFilter(
+                          filter: ImageFilter.blur(sigmaX: 1.5, sigmaY: 1.5),
+                          child: const SizedBox.expand(),
+                        ),
+
+                        // content
+                        Padding(
+                          padding: const EdgeInsets.all(14),
+                          child: Row(
+                            children: [
+                              // Logo (with graceful loading)
+                              ClipRRect(
+                                borderRadius: BorderRadius.circular(12),
+                                child: _LogoBox(url: t.tournamentLogo),
+                              ),
+                              const SizedBox(width: 14),
+                              // Texts
+                              Expanded(
+                                child: Column(
+                                  mainAxisAlignment: MainAxisAlignment.center,
+                                  crossAxisAlignment: CrossAxisAlignment.start,
+                                  children: [
+                                    Row(
+                                      children: [
+                                        Expanded(
+                                          child: Text(
+                                            t.tournamentName,
+                                            maxLines: 1,
+                                            overflow: TextOverflow.ellipsis,
+                                            style: theme.textTheme.titleMedium?.copyWith(
+                                              fontWeight: FontWeight.w700,
+                                              fontSize: 16,
+                                              color: isDark ? Colors.white : Colors.blue.shade900,
+                                            ),
                                           ),
+                                        ),
+                                        const SizedBox(width: 8),
+                                        _TypeBadge(color: _badgeColor, label: widget.type),
+                                      ],
+                                    ),
+                                    const SizedBox(height: 4),
+                                    if (t.tournamentDesc.isNotEmpty)
+                                      Text(
+                                        t.tournamentDesc,
+                                        maxLines: 1,
+                                        overflow: TextOverflow.ellipsis,
+                                        style: theme.textTheme.bodySmall?.copyWith(
+                                          color: isDark ? Colors.grey[400] : Colors.grey[700],
+                                        ),
+                                      ),
+                                    const SizedBox(height: 6),
+                                    Text(
+                                      "Start: ${_formatDate(t.startDate)} • Teams: ${t.teams}",
                                       maxLines: 1,
                                       overflow: TextOverflow.ellipsis,
+                                      style: theme.textTheme.labelSmall?.copyWith(
+                                        color: isDark ? Colors.grey[500] : Colors.grey[600],
+                                        fontSize: 12,
+                                      ),
                                     ),
-                                  const SizedBox(height: 6),
-                                  Text(
-                                    "Start: ${_formatDate(tournament.startDate)} • Teams: ${tournament.teams}",
-                                    style: theme.textTheme.labelSmall?.copyWith(
-                                      color: isDark
-                                          ? Colors.grey[500]
-                                          : Colors.grey[600],
-                                      fontSize: 12,
-                                    ),
-                                  ),
-                                ],
+                                  ],
+                                ),
                               ),
-                            ),
-                          ],
+                            ],
+                          ),
                         ),
-                      ),
+                      ],
                     ),
                   ),
                 ),
@@ -207,7 +214,9 @@ class _TournamentSectionState extends State<TournamentSection> {
               dotWidth: 8,
               spacing: 8,
               activeDotColor: AppColors.primary,
-              dotColor: isDark ? Colors.grey : Colors.grey.shade400,
+              dotColor: Theme.of(context).brightness == Brightness.dark
+                  ? Colors.grey
+                  : Colors.grey.shade400,
             ),
           ),
         ),
@@ -222,10 +231,11 @@ class _TournamentSectionState extends State<TournamentSection> {
     final highlight = isDark ? Colors.grey[700]! : Colors.grey[100]!;
 
     return SizedBox(
-      height: 180,
+      height: 190,
       child: ListView.builder(
         scrollDirection: Axis.horizontal,
         itemCount: 2,
+        physics: const BouncingScrollPhysics(),
         padding: const EdgeInsets.symmetric(horizontal: 16),
         itemBuilder: (context, index) {
           return Shimmer.fromColors(
@@ -253,5 +263,91 @@ class _TournamentSectionState extends State<TournamentSection> {
     } catch (_) {
       return date;
     }
+  }
+}
+
+// --- small helpers (UI only) ---
+
+class _LogoBox extends StatelessWidget {
+  final String url;
+  const _LogoBox({required this.url});
+
+  @override
+  Widget build(BuildContext context) {
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+
+    if (url.isEmpty) {
+      return Container(
+        width: 64,
+        height: 64,
+        color: isDark ? const Color(0xFF3A3A3A) : Colors.grey.shade200,
+        child: const Icon(Icons.image_not_supported, color: Colors.grey),
+      );
+    }
+
+    // Slightly crisper & resilient network image
+    final dpr = MediaQuery.of(context).devicePixelRatio;
+    final target = (64 * dpr).round();
+
+    return Image.network(
+      url,
+      width: 64,
+      height: 64,
+      fit: BoxFit.cover,
+      cacheWidth: target,
+      loadingBuilder: (ctx, child, progress) {
+        if (progress == null) return child;
+        return Container(
+          width: 64,
+          height: 64,
+          alignment: Alignment.center,
+          color: isDark ? const Color(0xFF2C2C2C) : Colors.grey.shade100,
+          child: SizedBox(
+            width: 18,
+            height: 18,
+            child: CircularProgressIndicator(
+              strokeWidth: 2,
+              valueColor: AlwaysStoppedAnimation(
+                Theme.of(context).colorScheme.primary.withOpacity(0.9),
+              ),
+            ),
+          ),
+        );
+      },
+      errorBuilder: (_, __, ___) => const Icon(Icons.broken_image, size: 64),
+    );
+  }
+}
+
+class _TypeBadge extends StatelessWidget {
+  final Color color;
+  final String label;
+  const _TypeBadge({required this.color, required this.label});
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 9, vertical: 3),
+      decoration: BoxDecoration(
+        color: color,
+        borderRadius: BorderRadius.circular(999),
+        boxShadow: [
+          BoxShadow(
+            color: color.withOpacity(0.25),
+            blurRadius: 8,
+            spreadRadius: 1,
+          ),
+        ],
+      ),
+      child: Text(
+        label.toUpperCase(),
+        style: const TextStyle(
+          color: Colors.white,
+          fontSize: 10.5,
+          fontWeight: FontWeight.w800,
+          letterSpacing: 0.6,
+        ),
+      ),
+    );
   }
 }

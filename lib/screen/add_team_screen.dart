@@ -1,8 +1,14 @@
+// lib/screen/add_team_screen.dart
 import 'dart:async';
 import 'dart:convert';
+import 'dart:io';
+
 import 'package:flutter/material.dart';
 import 'package:http/http.dart' as http;
+import 'package:image_picker/image_picker.dart';
 import 'package:shared_preferences/shared_preferences.dart';
+
+import '../service/user_image_service.dart';
 import '../screen/login_screen.dart';
 import '../theme/color.dart';
 
@@ -28,6 +34,10 @@ class _AddTeamScreenState extends State<AddTeamScreen> {
   int? _selectedGroupId;
   bool? _isGroupTournament;
 
+  // NEW: team logo (URL) + uploading state
+  String? _teamLogoUrl;
+  bool _uploadingLogo = false;
+
   final List<Map<String, dynamic>> _searchResults = [];
   final List<Map<String, dynamic>> _selectedPlayers = [];
   final Map<int, Map<String, dynamic>> _playerProfileCache = {};
@@ -39,18 +49,8 @@ class _AddTeamScreenState extends State<AddTeamScreen> {
   List<Map<String, dynamic>> _tournaments = [];
   List<Map<String, dynamic>> _groups = [];
 
-  final List<String> _roleFilters = [
-    'All',
-    'Batter',
-    'Bowler',
-    'All-Rounder',
-    'Wicket-Keeper',
-  ];
-  final List<String> _batterFilters = [
-    'All',
-    'Left Hand Batter',
-    'Right Hand Batter',
-  ];
+  final List<String> _roleFilters = ['All', 'Batter', 'Bowler', 'All-Rounder', 'Wicket-Keeper'];
+  final List<String> _batterFilters = ['All', 'Left Hand Batter', 'Right Hand Batter'];
 
   InputDecoration _input(String label, IconData icon) {
     return InputDecoration(
@@ -86,10 +86,8 @@ class _AddTeamScreenState extends State<AddTeamScreen> {
     final prefs = await SharedPreferences.getInstance();
     final token = prefs.getString('api_logged_in_token') ?? '';
     if (token.isEmpty) {
-      Navigator.pushReplacement(
-        context,
-        MaterialPageRoute(builder: (_) => const LoginScreen()),
-      );
+      if (!mounted) return;
+      Navigator.pushReplacement(context, MaterialPageRoute(builder: (_) => const LoginScreen()));
     } else {
       setState(() => _apiToken = token);
       _fetchTournaments();
@@ -108,6 +106,51 @@ class _AddTeamScreenState extends State<AddTeamScreen> {
     });
   }
 
+  // --------- NEW: pick + upload team logo (URL) ----------
+  Future<void> _pickAndUploadTeamLogo(ImageSource source) async {
+    if ((_apiToken ?? '').isEmpty) {
+      await _checkLogin();
+      if ((_apiToken ?? '').isEmpty) return;
+    }
+
+    final picked = await ImagePicker().pickImage(
+      source: source,
+      imageQuality: 70,
+      maxWidth: 900,
+    );
+    if (picked == null) return;
+
+    final file = File(picked.path);
+    final lower = picked.path.toLowerCase();
+    final sizeMB = (await file.length()) / (1024 * 1024);
+
+    if (!(lower.endsWith('.jpg') || lower.endsWith('.jpeg') || lower.endsWith('.png'))) {
+      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Only JPG/PNG allowed')));
+      return;
+    }
+    if (sizeMB > 2.0) {
+      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Image must be under 2 MB')));
+      return;
+    }
+
+    setState(() => _uploadingLogo = true);
+    try {
+      final url = await UserImageService.uploadAndGetUrl(
+        token: _apiToken!,
+        file: file,
+        postTimeout: const Duration(seconds: 30),
+      );
+      if (!mounted) return;
+      setState(() => _teamLogoUrl = url);
+      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Logo uploaded')));
+    } catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Logo upload failed: $e')));
+    } finally {
+      if (mounted) setState(() => _uploadingLogo = false);
+    }
+  }
+
   Widget _buildPlayerCard(Map<String, dynamic> p) {
     final idRaw = p['ID'];
     final id = idRaw is int ? idRaw : int.tryParse(idRaw.toString()) ?? 0;
@@ -117,19 +160,14 @@ class _AddTeamScreenState extends State<AddTeamScreen> {
       final type = (profile?['player_type'] ?? '').toString().toLowerCase();
       if (type != _selectedRole.toLowerCase()) return const SizedBox.shrink();
     }
-
     if (_selectedBatterType != 'All' && profile != null) {
       final bType = (profile['batter_type'] ?? '').toString().toLowerCase();
-      if (!_selectedBatterType.toLowerCase().contains(bType)) {
-        return const SizedBox.shrink();
-      }
+      if (!_selectedBatterType.toLowerCase().contains(bType)) return const SizedBox.shrink();
     }
 
     final name = p['display_name'] ?? '';
     final login = p['user_login'] ?? '';
-    final selected = _selectedPlayers.any(
-      (x) => x['ID'].toString() == id.toString(),
-    );
+    final selected = _selectedPlayers.any((x) => x['ID'].toString() == id.toString());
     final imageUrl = profile?['user_profile_image'];
     final playerType = profile?['player_type'] ?? 'Fetching...';
 
@@ -141,23 +179,14 @@ class _AddTeamScreenState extends State<AddTeamScreen> {
         leading: CircleAvatar(
           radius: 24,
           backgroundColor: Colors.grey[200],
-          backgroundImage: null,
           child: ClipOval(
             child: imageUrl != null
                 ? Image.network(
-                    imageUrl,
-                    width: 48,
-                    height: 48,
-                    fit: BoxFit.cover,
-                    errorBuilder: (_, __, ___) => Image.asset(
-                      'lib/asset/images/Random_Image.png',
-                      fit: BoxFit.cover,
-                    ),
-                  )
-                : Image.asset(
-                    'lib/asset/images/Random_Image.png',
-                    fit: BoxFit.cover,
-                  ),
+              imageUrl,
+              width: 48, height: 48, fit: BoxFit.cover,
+              errorBuilder: (_, __, ___) => Image.asset('lib/asset/images/Random_Image.png', fit: BoxFit.cover),
+            )
+                : Image.asset('lib/asset/images/Random_Image.png', fit: BoxFit.cover),
           ),
         ),
         title: Text(name, style: const TextStyle(fontWeight: FontWeight.w600)),
@@ -170,19 +199,14 @@ class _AddTeamScreenState extends State<AddTeamScreen> {
             if (profile?['bowler_type'] != null) Text(profile!['bowler_type']),
             if (profile?['teams'] != null)
               Text(
-                (profile!['teams'] as List)
-                    .map((t) => t['team_name'].toString())
-                    .join(', '),
+                (profile!['teams'] as List).map((t) => t['team_name'].toString()).join(', '),
                 style: const TextStyle(color: Colors.grey),
               ),
           ],
         ),
         isThreeLine: true,
         trailing: IconButton(
-          icon: Icon(
-            selected ? Icons.remove_circle : Icons.add_circle,
-            color: selected ? Colors.red : AppColors.primary,
-          ),
+          icon: Icon(selected ? Icons.remove_circle : Icons.add_circle, color: selected ? Colors.red : AppColors.primary),
           onPressed: () => _togglePlayer(p),
         ),
       ),
@@ -193,24 +217,14 @@ class _AddTeamScreenState extends State<AddTeamScreen> {
     final url = Uri.parse(
       'https://cricjust.in/wp-json/custom-api-for-cricket/get-tournaments-for-create-match?api_logged_in_token=$_apiToken&limit=20&skip=0',
     );
-
     try {
       final res = await http.get(url);
       if (res.statusCode == 200) {
         final jsonBody = json.decode(res.body);
         final List data = jsonBody['data'] ?? [];
-
-        setState(() {
-          _tournaments = List<Map<String, dynamic>>.from(
-            data,
-          ); // ← no filter here
-        });
-      } else {
-        print('Tournament fetch failed: ${res.statusCode}');
+        setState(() => _tournaments = List<Map<String, dynamic>>.from(data));
       }
-    } catch (e) {
-      print('Tournament fetch error: $e');
-    }
+    } catch (_) {}
   }
 
   Future<void> _fetchGroups(int tournamentId) async {
@@ -227,9 +241,7 @@ class _AddTeamScreenState extends State<AddTeamScreen> {
           _selectedGroupId = null;
         });
       }
-    } catch (e) {
-      print('Group fetch error: $e');
-    }
+    } catch (_) {}
   }
 
   Future<void> _performSearch({bool reset = false}) async {
@@ -264,18 +276,14 @@ class _AddTeamScreenState extends State<AddTeamScreen> {
         await Future.wait(
           data.map((p) async {
             final idRaw = p['ID'];
-            final playerId = idRaw is int
-                ? idRaw
-                : int.tryParse(idRaw.toString()) ?? 0;
+            final playerId = idRaw is int ? idRaw : int.tryParse(idRaw.toString()) ?? 0;
             if (playerId != 0 && !_playerProfileCache.containsKey(playerId)) {
               await fetchPlayerProfile(playerId);
             }
           }),
         );
       }
-    } catch (e) {
-      print('Search error: $e');
-    }
+    } catch (_) {}
 
     setState(() => _loadingSearch = false);
   }
@@ -284,20 +292,16 @@ class _AddTeamScreenState extends State<AddTeamScreen> {
     final url = Uri.parse(
       'https://cricjust.in/wp-json/custom-api-for-cricket/get-player-public-info?player_id=$playerId',
     );
-
     try {
       final response = await http.get(url);
       if (response.statusCode == 200) {
         final body = json.decode(response.body);
         if (body['status'] == 1 && body['player_info'] != null) {
           final playerInfo = body['player_info'];
-
           if (playerInfo['user_profile_image'] != null) {
-            playerInfo['user_profile_image'] = playerInfo['user_profile_image']
-                .toString()
-                .replaceAll('&amp;', '&');
+            playerInfo['user_profile_image'] =
+                playerInfo['user_profile_image'].toString().replaceAll('&amp;', '&');
           }
-
           if (playerInfo['teams'] is List) {
             for (var team in playerInfo['teams']) {
               if (team['team_name'] != null) {
@@ -305,24 +309,17 @@ class _AddTeamScreenState extends State<AddTeamScreen> {
               }
             }
           }
-
-          setState(() {
-            _playerProfileCache[playerId] = playerInfo;
-          });
+          setState(() => _playerProfileCache[playerId] = playerInfo);
         }
       }
-    } catch (e) {
-      print('Profile fetch error for $playerId: $e');
-    }
+    } catch (_) {}
   }
 
   void _togglePlayer(Map<String, dynamic> p) {
     final id = p['ID'] is int ? p['ID'] : int.tryParse(p['ID'].toString()) ?? 0;
     setState(() {
       if (_selectedPlayers.any((x) => x['ID'].toString() == id.toString())) {
-        _selectedPlayers.removeWhere(
-          (x) => x['ID'].toString() == id.toString(),
-        );
+        _selectedPlayers.removeWhere((x) => x['ID'].toString() == id.toString());
       } else {
         _selectedPlayers.add(p);
       }
@@ -330,53 +327,43 @@ class _AddTeamScreenState extends State<AddTeamScreen> {
   }
 
   Future<void> _confirmAndSave() async {
+    if (_uploadingLogo) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Please wait for the logo upload to finish')),
+      );
+      return;
+    }
     final shouldSave = await showDialog<bool>(
       context: context,
       builder: (context) => AlertDialog(
         title: const Text('Confirm Save'),
         content: const Text('Are you sure you want to save this team?'),
         actions: [
-          TextButton(
-            child: const Text('Cancel'),
-            onPressed: () => Navigator.of(context).pop(false),
-          ),
+          TextButton(onPressed: () => Navigator.of(context).pop(false), child: const Text('Cancel')),
           ElevatedButton(
-            style: ElevatedButton.styleFrom(
-              backgroundColor: AppColors.primary,
-              foregroundColor: Colors.white,
-            ),
-            child: const Text('Yes, Save'),
+            style: ElevatedButton.styleFrom(backgroundColor: AppColors.primary, foregroundColor: Colors.white),
             onPressed: () => Navigator.of(context).pop(true),
+            child: const Text('Yes, Save'),
           ),
         ],
       ),
     );
-
-    if (shouldSave == true) {
-      await saveTeam();
-    }
+    if (shouldSave == true) await saveTeam();
   }
 
   Future<void> saveTeam() async {
     if (!_formKey.currentState!.validate()) return;
     if (_selectedPlayers.isEmpty) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Please select at least one player')),
-      );
+      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Please select at least one player')));
       return;
     }
     if (_teamType == 'tournament') {
       if (_selectedTournamentId == null) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('Please select a tournament')),
-        );
+        ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Please select a tournament')));
         return;
       }
-
       if (_isGroupTournament == true && _selectedGroupId == null) {
-        ScaffoldMessenger.of(
-          context,
-        ).showSnackBar(const SnackBar(content: Text('Please select a group')));
+        ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Please select a group')));
         return;
       }
     }
@@ -387,13 +374,12 @@ class _AddTeamScreenState extends State<AddTeamScreen> {
       'https://cricjust.in/wp-json/custom-api-for-cricket/add-team?api_logged_in_token=$_apiToken',
     );
 
-    final body = {
+    final body = <String, String>{
       'team_name': _teamNameCtrl.text.trim(),
       'team_description': _descCtrl.text.trim(),
-      'team_logo':
-          'https://cricjust.in/wp-content/uploads/user_images/21611-1725762281.jpg',
-      'tournament_id': _selectedTournamentId.toString(),
-      'group_id': _selectedGroupId.toString(),
+      'team_logo': (_teamLogoUrl ?? '').isNotEmpty ? _teamLogoUrl! : '', // ← send URL
+      'tournament_id': (_selectedTournamentId ?? '').toString(),
+      'group_id': (_selectedGroupId ?? '').toString(),
     };
 
     for (int i = 0; i < _selectedPlayers.length; i++) {
@@ -405,10 +391,22 @@ class _AddTeamScreenState extends State<AddTeamScreen> {
 
       if (response.statusCode == 200) {
         final result = json.decode(response.body);
+
+        // handle invalid token → force login
+        if (result is Map &&
+            result['status'] == 0 &&
+            (result['message'] ?? '').toString().toLowerCase().contains('invalid api logged in token')) {
+          final prefs = await SharedPreferences.getInstance();
+          await prefs.remove('api_logged_in_token');
+          if (!mounted) return;
+          ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(result['message'])));
+          Navigator.pushAndRemoveUntil(context, MaterialPageRoute(builder: (_) => const LoginScreen()), (_) => false);
+          return;
+        }
+
         if (result['status'] == 1) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(content: Text('Team added successfully')),
-          );
+          if (!mounted) return;
+          ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Team added successfully')));
           setState(() {
             _teamNameCtrl.clear();
             _descCtrl.clear();
@@ -420,23 +418,25 @@ class _AddTeamScreenState extends State<AddTeamScreen> {
             _selectedTournamentId = null;
             _selectedGroupId = null;
             _groups.clear();
+            _teamLogoUrl = null;
           });
         } else {
+          if (!mounted) return;
           ScaffoldMessenger.of(context).showSnackBar(
             SnackBar(content: Text(result['message'] ?? 'Failed to add team')),
           );
         }
       } else {
+        if (!mounted) return;
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(content: Text('Server error: ${response.statusCode}')),
         );
       }
     } catch (e) {
-      ScaffoldMessenger.of(
-        context,
-      ).showSnackBar(SnackBar(content: Text('Error: $e')));
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Error: $e')));
     } finally {
-      setState(() => _isSubmitting = false);
+      if (mounted) setState(() => _isSubmitting = false);
     }
   }
 
@@ -468,28 +468,17 @@ class _AddTeamScreenState extends State<AddTeamScreen> {
         child: Center(
           child: isLoading
               ? const SizedBox(
-                  width: 20,
-                  height: 20,
-                  child: CircularProgressIndicator(
-                    color: Colors.white,
-                    strokeWidth: 2,
-                  ),
-                )
+            width: 20, height: 20,
+            child: CircularProgressIndicator(color: Colors.white, strokeWidth: 2),
+          )
               : Row(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    Icon(icon, color: Colors.white),
-                    const SizedBox(width: 8),
-                    Text(
-                      label,
-                      style: const TextStyle(
-                        color: Colors.white,
-                        fontWeight: FontWeight.bold,
-                        fontSize: 16,
-                      ),
-                    ),
-                  ],
-                ),
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Icon(icon, color: Colors.white),
+              const SizedBox(width: 8),
+              Text(label, style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 16)),
+            ],
+          ),
         ),
       ),
     );
@@ -509,33 +498,23 @@ class _AddTeamScreenState extends State<AddTeamScreen> {
         child: Container(
           decoration: Theme.of(context).brightness == Brightness.dark
               ? const BoxDecoration(
-                  color: Color(0xFF1E1E1E),
-                  borderRadius: BorderRadius.vertical(
-                    bottom: Radius.circular(20),
-                  ),
-                )
+            color: Color(0xFF1E1E1E),
+            borderRadius: BorderRadius.vertical(bottom: Radius.circular(20)),
+          )
               : const BoxDecoration(
-                  gradient: LinearGradient(
-                    colors: [AppColors.primary, Color(0xFF42A5F5)],
-                    begin: Alignment.topLeft,
-                    end: Alignment.bottomRight,
-                  ),
-                  borderRadius: BorderRadius.vertical(
-                    bottom: Radius.circular(20),
-                  ),
-                ),
+            gradient: LinearGradient(
+              colors: [AppColors.primary, Color(0xFF42A5F5)],
+              begin: Alignment.topLeft,
+              end: Alignment.bottomRight,
+            ),
+            borderRadius: BorderRadius.vertical(bottom: Radius.circular(20)),
+          ),
           child: AppBar(
             backgroundColor: Colors.transparent,
             elevation: 0,
             centerTitle: true,
             automaticallyImplyLeading: true,
-            title: const Text(
-              'Add Team',
-              style: TextStyle(
-                color: Colors.white,
-                fontWeight: FontWeight.bold,
-              ),
-            ),
+            title: const Text('Add Team', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
           ),
         ),
       ),
@@ -543,335 +522,389 @@ class _AddTeamScreenState extends State<AddTeamScreen> {
       body: _apiToken == null
           ? const Center(child: CircularProgressIndicator())
           : SingleChildScrollView(
-              padding: const EdgeInsets.all(16),
-              child: Card(
-                color: cardColor,
-                elevation: 8,
-                shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(20),
-                ),
-                child: Padding(
-                  padding: const EdgeInsets.all(20),
+        padding: const EdgeInsets.all(16),
+        child: Card(
+          color: cardColor,
+          elevation: 8,
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+          child: Padding(
+            padding: const EdgeInsets.all(20),
+            child: Column(
+              children: [
+                Form(
+                  key: _formKey,
                   child: Column(
                     children: [
-                      Form(
-                        key: _formKey,
+                      // NEW: Team Logo card (preview + buttons)
+                      Container(
+                        width: double.infinity,
+                        margin: const EdgeInsets.only(bottom: 16),
+                        padding: const EdgeInsets.all(12),
+                        decoration: BoxDecoration(
+                          color: isDark ? Colors.white10 : Colors.white,
+                          borderRadius: BorderRadius.circular(16),
+                          boxShadow: [
+                            if (!isDark)
+                              BoxShadow(
+                                color: Colors.black.withOpacity(0.06),
+                                blurRadius: 12,
+                                offset: const Offset(0, 4),
+                              ),
+                          ],
+                          border: Border.all(color: isDark ? Colors.white12 : Colors.black12),
+                        ),
                         child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
                           children: [
-                            // Team Type Switch
                             Row(
-                              mainAxisAlignment: MainAxisAlignment.center,
                               children: [
-                                Row(
-                                  children: [
-                                    Radio<String>(
-                                      value: 'match',
-                                      groupValue: _teamType,
-                                      onChanged: (val) {
-                                        setState(() {
-                                          _teamType = val!;
-                                          _selectedTournamentId = null;
-                                          _selectedGroupId = null;
-                                          _isGroupTournament = false;
-                                        });
-                                      },
-                                    ),
-                                    const Text('Match Team'),
-                                  ],
+                                Container(
+                                  height: 28, width: 28,
+                                  decoration: BoxDecoration(
+                                    color: AppColors.primary.withOpacity(.12),
+                                    borderRadius: BorderRadius.circular(8),
+                                  ),
+                                  child: Icon(Icons.image, color: AppColors.primary, size: 16),
                                 ),
-                                const SizedBox(width: 16),
-                                Row(
-                                  children: [
-                                    Radio<String>(
-                                      value: 'tournament',
-                                      groupValue: _teamType,
-                                      onChanged: (val) {
-                                        setState(() {
-                                          _teamType = val!;
-                                          _selectedTournamentId = null;
-                                          _selectedGroupId = null;
-                                          _isGroupTournament = false;
-                                        });
-                                      },
-                                    ),
-                                    const Text('Tournament Team'),
-                                  ],
-                                ),
+                                const SizedBox(width: 10),
+                                const Text('Team Logo', style: TextStyle(fontSize: 16, fontWeight: FontWeight.w700)),
                               ],
                             ),
                             const SizedBox(height: 12),
-
-                            // Tournament & Group Dropdowns (if Tournament Team selected)
-                            if (_teamType == 'tournament') ...[
-                              DropdownButtonFormField<int>(
-                                value: _selectedTournamentId,
-                                decoration: _input(
-                                  'Select Tournament',
-                                  Icons.emoji_events,
+                            Wrap(
+                              spacing: 12,
+                              runSpacing: 10,
+                              crossAxisAlignment: WrapCrossAlignment.center,
+                              children: [
+                                ClipRRect(
+                                  borderRadius: BorderRadius.circular(12),
+                                  child: (_teamLogoUrl != null && _teamLogoUrl!.isNotEmpty)
+                                      ? Image.network(
+                                    _teamLogoUrl!,
+                                    height: 64, width: 64, fit: BoxFit.cover,
+                                    errorBuilder: (_, __, ___) => Container(
+                                      height: 64, width: 64,
+                                      decoration: BoxDecoration(
+                                        color: Colors.black12,
+                                        borderRadius: BorderRadius.circular(12),
+                                      ),
+                                      child: const Icon(Icons.broken_image),
+                                    ),
+                                  )
+                                      : Container(
+                                    height: 64, width: 64,
+                                    decoration: BoxDecoration(
+                                      color: Colors.black12, borderRadius: BorderRadius.circular(12),
+                                    ),
+                                    child: const Icon(Icons.image_outlined),
+                                  ),
                                 ),
-                                items: _tournaments.map((t) {
-                                  final id = int.tryParse(
-                                    t['tournament_id'].toString(),
-                                  );
-                                  return DropdownMenuItem<int>(
-                                    value: id,
-                                    child: Row(
-                                      children: [
-                                        if ((t['tournament_logo'] ?? '')
-                                            .toString()
-                                            .isNotEmpty)
-                                          Padding(
-                                            padding: const EdgeInsets.only(
-                                              right: 8,
+                                Wrap(
+                                  spacing: 8,
+                                  runSpacing: 8,
+                                  children: [
+                                    if (_teamLogoUrl != null && _teamLogoUrl!.isNotEmpty)
+                                      SizedBox(
+                                        height: 36,
+                                        child: TextButton.icon(
+                                          onPressed: _uploadingLogo ? null : () => setState(() => _teamLogoUrl = null),
+                                          icon: const Icon(Icons.close, size: 18),
+                                          label: const Text('Remove'),
+                                          style: TextButton.styleFrom(
+                                            foregroundColor: Colors.grey.shade600,
+                                            padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+                                            shape: RoundedRectangleBorder(
+                                              borderRadius: BorderRadius.circular(999),
+                                              side: BorderSide(color: Colors.grey.shade500, width: 1),
                                             ),
-                                            child: CircleAvatar(
-                                              radius: 12,
-                                              backgroundImage: NetworkImage(
-                                                t['tournament_logo'],
-                                              ),
-                                              backgroundColor: Colors.grey[300],
-                                            ),
-                                          ),
-                                        Flexible(
-                                          child: Text(
-                                            t['tournament_name'] ?? 'Unnamed',
-                                            overflow: TextOverflow.ellipsis,
-                                            style: const TextStyle(
-                                              fontSize: 14,
-                                            ),
+                                            visualDensity: VisualDensity.compact,
                                           ),
                                         ),
-                                      ],
+                                      ),
+                                    SizedBox(
+                                      height: 36,
+                                      child: TextButton.icon(
+                                        onPressed: _uploadingLogo ? null : () => _pickAndUploadTeamLogo(ImageSource.gallery),
+                                        icon: const Icon(Icons.photo, size: 18),
+                                        label: const Text('Gallery'),
+                                        style: TextButton.styleFrom(
+                                          foregroundColor: Colors.white,
+                                          backgroundColor: AppColors.primary,
+                                          padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+                                          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(999)),
+                                          visualDensity: VisualDensity.compact,
+                                        ),
+                                      ),
                                     ),
-                                  );
-                                }).toList(),
-                                onChanged: (val) {
-                                  setState(() {
-                                    _selectedTournamentId = val;
-                                    _selectedGroupId = null;
-                                    final selected = _tournaments.firstWhere(
-                                      (t) =>
-                                          t['tournament_id'].toString() ==
-                                          val.toString(),
-                                      orElse: () => {},
-                                    );
-                                    _isGroupTournament =
-                                        selected['is_group'] == '1';
-                                  });
-                                  if (_isGroupTournament == true &&
-                                      val != null) {
-                                    _fetchGroups(val);
-                                  }
-                                },
-                                selectedItemBuilder: (context) {
-                                  return _tournaments.map((t) {
-                                    return Text(
-                                      t['tournament_name'] ?? 'Unnamed',
-                                      style: const TextStyle(fontSize: 14),
-                                    );
-                                  }).toList();
-                                },
-                              ),
-                              const SizedBox(height: 14),
-
-                              if (_isGroupTournament == true)
-                                DropdownButtonFormField<int>(
-                                  value: _selectedGroupId,
-                                  decoration: _input(
-                                    'Select Group',
-                                    Icons.group_work,
-                                  ),
-                                  items: _groups.map((g) {
-                                    final id = int.tryParse(
-                                      g['group_id'].toString(),
-                                    );
-                                    return DropdownMenuItem<int>(
-                                      value: id,
-                                      child: Text(g['group_name'] ?? 'Unnamed'),
-                                    );
-                                  }).toList(),
-                                  onChanged: (val) {
-                                    setState(() => _selectedGroupId = val);
-                                  },
-                                  validator: (val) {
-                                    if (_isGroupTournament == true &&
-                                        val == null) {
-                                      return 'Please select a group';
-                                    }
-                                    return null;
-                                  },
+                                    SizedBox(
+                                      height: 36,
+                                      child: TextButton.icon(
+                                        onPressed: _uploadingLogo ? null : () => _pickAndUploadTeamLogo(ImageSource.camera),
+                                        icon: const Icon(Icons.camera_alt, size: 18),
+                                        label: const Text('Camera'),
+                                        style: TextButton.styleFrom(
+                                          foregroundColor: AppColors.primary,
+                                          backgroundColor: Colors.transparent,
+                                          padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+                                          shape: RoundedRectangleBorder(
+                                            borderRadius: BorderRadius.circular(999),
+                                            side: BorderSide(color: AppColors.primary, width: 1),
+                                          ),
+                                          visualDensity: VisualDensity.compact,
+                                        ),
+                                      ),
+                                    ),
+                                    if (_uploadingLogo)
+                                      const SizedBox(
+                                        height: 18, width: 18,
+                                        child: CircularProgressIndicator(strokeWidth: 2),
+                                      ),
+                                  ],
                                 ),
-                            ],
-
-                            const SizedBox(height: 14),
-                            TextFormField(
-                              controller: _teamNameCtrl,
-                              decoration: _input('Team Name', Icons.group),
-                              validator: (v) =>
-                                  v == null || v.isEmpty ? 'Required' : null,
-                            ),
-                            const SizedBox(height: 14),
-                            TextFormField(
-                              controller: _descCtrl,
-                              decoration: _input(
-                                'Team Description',
-                                Icons.description,
-                              ),
+                              ],
                             ),
                           ],
                         ),
                       ),
 
-                      const SizedBox(height: 20),
-                      Align(
-                        alignment: Alignment.centerLeft,
-                        child: Text(
-                          'Filter Players',
-                          style: Theme.of(context).textTheme.titleMedium!
-                              .copyWith(
-                                fontWeight: FontWeight.w700,
-                                fontSize: 16,
+                      // Team Type Switch
+                      Row(
+                        mainAxisAlignment: MainAxisAlignment.center,
+                        children: [
+                          Row(
+                            children: [
+                              Radio<String>(
+                                value: 'match',
+                                groupValue: _teamType,
+                                onChanged: (val) {
+                                  setState(() {
+                                    _teamType = val!;
+                                    _selectedTournamentId = null;
+                                    _selectedGroupId = null;
+                                    _isGroupTournament = false;
+                                  });
+                                },
                               ),
-                        ),
+                              const Text('Match Team'),
+                            ],
+                          ),
+                          const SizedBox(width: 16),
+                          Row(
+                            children: [
+                              Radio<String>(
+                                value: 'tournament',
+                                groupValue: _teamType,
+                                onChanged: (val) {
+                                  setState(() {
+                                    _teamType = val!;
+                                    _selectedTournamentId = null;
+                                    _selectedGroupId = null;
+                                    _isGroupTournament = false;
+                                  });
+                                },
+                              ),
+                              const Text('Tournament Team'),
+                            ],
+                          ),
+                        ],
                       ),
                       const SizedBox(height: 12),
-                      Wrap(
-                        spacing: 10,
-                        runSpacing: 8,
-                        children: [
-                          ..._roleFilters.map(
-                            (role) => FilterChip(
-                              label: Text(role),
-                              selected: _selectedRole == role,
-                              onSelected: (_) =>
-                                  setState(() => _selectedRole = role),
-                              backgroundColor: chipBgColor,
-                              selectedColor: AppColors.primary,
-                              labelStyle: TextStyle(
-                                color: isDark ? Colors.white : Colors.black,
-                              ),
-                            ),
-                          ),
-                          const SizedBox(width: 12),
-                          ..._batterFilters.map(
-                            (type) => FilterChip(
-                              label: Text(type),
-                              selected: _selectedBatterType == type,
-                              onSelected: (_) =>
-                                  setState(() => _selectedBatterType = type),
-                              backgroundColor: chipBgColor,
-                              selectedColor: AppColors.primary,
-                              labelStyle: TextStyle(
-                                color: isDark ? Colors.white : Colors.black,
-                              ),
-                            ),
-                          ),
-                        ],
-                      ),
-                      const SizedBox(height: 20),
-                      Row(
-                        children: [
-                          Expanded(
-                            child: TextField(
-                              controller: _searchCtrl,
-                              decoration: _input(
-                                'Search players...',
-                                Icons.search,
-                              ),
-                            ),
-                          ),
-                          const SizedBox(width: 8),
-                          ElevatedButton.icon(
-                            style: ElevatedButton.styleFrom(
-                              backgroundColor: isDark
-                                  ? Colors.white.withOpacity(0.1)
-                                  : AppColors.primary,
-                              foregroundColor: Colors.white,
-                              elevation: isDark ? 2 : 4,
-                              shadowColor: isDark
-                                  ? Colors.white24
-                                  : Colors.black45,
-                              padding: const EdgeInsets.symmetric(
-                                horizontal: 16,
-                                vertical: 12,
-                              ),
-                              shape: RoundedRectangleBorder(
-                                borderRadius: BorderRadius.circular(12),
-                                side: isDark
-                                    ? const BorderSide(color: Colors.white24)
-                                    : BorderSide.none,
-                              ),
-                            ),
-                            icon: _loadingSearch
-                                ? const SizedBox(
-                                    width: 16,
-                                    height: 16,
-                                    child: CircularProgressIndicator(
-                                      color: Colors.white,
-                                      strokeWidth: 2,
+
+                      if (_teamType == 'tournament') ...[
+                        DropdownButtonFormField<int>(
+                          value: _selectedTournamentId,
+                          decoration: _input('Select Tournament', Icons.emoji_events),
+                          items: _tournaments.map((t) {
+                            final id = int.tryParse(t['tournament_id'].toString());
+                            return DropdownMenuItem<int>(
+                              value: id,
+                              child: Row(
+                                children: [
+                                  if ((t['tournament_logo'] ?? '').toString().isNotEmpty)
+                                    Padding(
+                                      padding: const EdgeInsets.only(right: 8),
+                                      child: CircleAvatar(
+                                        radius: 12,
+                                        backgroundImage: NetworkImage(t['tournament_logo']),
+                                        backgroundColor: Colors.grey[300],
+                                      ),
                                     ),
-                                  )
-                                : const Icon(Icons.download),
-                            onPressed: _loadingSearch
-                                ? null
-                                : () => _performSearch(reset: false),
-                            label: _loadingSearch
-                                ? const Text("Loading...")
-                                : const Text(
-                                    "Load More",
-                                    style: TextStyle(
-                                      fontWeight: FontWeight.bold,
+                                  Flexible(
+                                    child: Text(
+                                      t['tournament_name'] ?? 'Unnamed',
+                                      overflow: TextOverflow.ellipsis,
+                                      style: const TextStyle(fontSize: 14),
                                     ),
                                   ),
-                          ),
-                        ],
-                      ),
-                      const SizedBox(height: 16),
-                      _loadingSearch && _searchResults.isEmpty
-                          ? const Center(child: CircularProgressIndicator())
-                          : ListView.builder(
-                              shrinkWrap: true,
-                              physics: const NeverScrollableScrollPhysics(),
-                              itemCount: _searchResults.length,
-                              itemBuilder: (context, index) =>
-                                  _buildPlayerCard(_searchResults[index]),
-                            ),
-                      const Divider(height: 30, thickness: 1.2),
-                      Align(
-                        alignment: Alignment.centerLeft,
-                        child: Text(
-                          'Selected Players (${_selectedPlayers.length})',
-                          style: Theme.of(context).textTheme.titleMedium!
-                              .copyWith(fontWeight: FontWeight.bold),
+                                ],
+                              ),
+                            );
+                          }).toList(),
+                          onChanged: (val) {
+                            setState(() {
+                              _selectedTournamentId = val;
+                              _selectedGroupId = null;
+                              final selected = _tournaments.firstWhere(
+                                    (t) => t['tournament_id'].toString() == val.toString(),
+                                orElse: () => {},
+                              );
+                              _isGroupTournament = selected['is_group'] == '1';
+                            });
+                            if (_isGroupTournament == true && val != null) _fetchGroups(val);
+                          },
+                          selectedItemBuilder: (context) {
+                            return _tournaments
+                                .map((t) => Text(t['tournament_name'] ?? 'Unnamed', style: const TextStyle(fontSize: 14)))
+                                .toList();
+                          },
                         ),
+                        const SizedBox(height: 14),
+                        if (_isGroupTournament == true)
+                          DropdownButtonFormField<int>(
+                            value: _selectedGroupId,
+                            decoration: _input('Select Group', Icons.group_work),
+                            items: _groups.map((g) {
+                              final id = int.tryParse(g['group_id'].toString());
+                              return DropdownMenuItem<int>(value: id, child: Text(g['group_name'] ?? 'Unnamed'));
+                            }).toList(),
+                            onChanged: (val) => setState(() => _selectedGroupId = val),
+                            validator: (val) {
+                              if (_isGroupTournament == true && val == null) {
+                                return 'Please select a group';
+                              }
+                              return null;
+                            },
+                          ),
+                      ],
+
+                      const SizedBox(height: 14),
+                      TextFormField(
+                        controller: _teamNameCtrl,
+                        decoration: _input('Team Name', Icons.group),
+                        validator: (v) => v == null || v.isEmpty ? 'Required' : null,
                       ),
-                      const SizedBox(height: 10),
-                      Wrap(
-                        spacing: 6,
-                        children: _selectedPlayers.map((p) {
-                          final name = p['display_name'] ?? '';
-                          return Chip(
-                            label: Text(name),
-                            onDeleted: () => _togglePlayer(p),
-                            backgroundColor: chipBgColor,
-                            labelStyle: TextStyle(
-                              color: isDark ? Colors.white : Colors.black,
-                            ),
-                          );
-                        }).toList(),
-                      ),
-                      const SizedBox(height: 24),
-                      buildGlassButton(
-                        label: 'Save Team',
-                        icon: Icons.save,
-                        onPressed: _isSubmitting ? () {} : _confirmAndSave,
-                        isLoading: _isSubmitting,
+                      const SizedBox(height: 14),
+                      TextFormField(
+                        controller: _descCtrl,
+                        decoration: _input('Team Description', Icons.description),
                       ),
                     ],
                   ),
                 ),
-              ),
+
+                const SizedBox(height: 20),
+                Align(
+                  alignment: Alignment.centerLeft,
+                  child: Text(
+                    'Filter Players',
+                    style: Theme.of(context).textTheme.titleMedium!.copyWith(fontWeight: FontWeight.w700, fontSize: 16),
+                  ),
+                ),
+                const SizedBox(height: 12),
+                Wrap(
+                  spacing: 10,
+                  runSpacing: 8,
+                  children: [
+                    ..._roleFilters.map(
+                          (role) => FilterChip(
+                        label: Text(role),
+                        selected: _selectedRole == role,
+                        onSelected: (_) => setState(() => _selectedRole = role),
+                        backgroundColor: chipBgColor,
+                        selectedColor: AppColors.primary,
+                        labelStyle: TextStyle(color: isDark ? Colors.white : Colors.black),
+                      ),
+                    ),
+                    const SizedBox(width: 12),
+                    ..._batterFilters.map(
+                          (type) => FilterChip(
+                        label: Text(type),
+                        selected: _selectedBatterType == type,
+                        onSelected: (_) => setState(() => _selectedBatterType = type),
+                        backgroundColor: chipBgColor,
+                        selectedColor: AppColors.primary,
+                        labelStyle: TextStyle(color: isDark ? Colors.white : Colors.black),
+                      ),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 20),
+                Row(
+                  children: [
+                    Expanded(
+                      child: TextField(
+                        controller: _searchCtrl,
+                        decoration: _input('Search players...', Icons.search),
+                      ),
+                    ),
+                    const SizedBox(width: 8),
+                    ElevatedButton.icon(
+                      style: ElevatedButton.styleFrom(
+                        backgroundColor: isDark ? Colors.white.withOpacity(0.1) : AppColors.primary,
+                        foregroundColor: Colors.white,
+                        elevation: isDark ? 2 : 4,
+                        shadowColor: isDark ? Colors.white24 : Colors.black45,
+                        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+                        shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(12),
+                          side: isDark ? const BorderSide(color: Colors.white24) : BorderSide.none,
+                        ),
+                      ),
+                      icon: _loadingSearch
+                          ? const SizedBox(
+                        width: 16, height: 16,
+                        child: CircularProgressIndicator(color: Colors.white, strokeWidth: 2),
+                      )
+                          : const Icon(Icons.download),
+                      onPressed: _loadingSearch ? null : () => _performSearch(reset: false),
+                      label: _loadingSearch
+                          ? const Text("Loading...")
+                          : const Text("Load More", style: TextStyle(fontWeight: FontWeight.bold)),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 16),
+                _loadingSearch && _searchResults.isEmpty
+                    ? const Center(child: CircularProgressIndicator())
+                    : ListView.builder(
+                  shrinkWrap: true,
+                  physics: const NeverScrollableScrollPhysics(),
+                  itemCount: _searchResults.length,
+                  itemBuilder: (context, index) => _buildPlayerCard(_searchResults[index]),
+                ),
+                const Divider(height: 30, thickness: 1.2),
+                Align(
+                  alignment: Alignment.centerLeft,
+                  child: Text(
+                    'Selected Players (${_selectedPlayers.length})',
+                    style: Theme.of(context).textTheme.titleMedium!.copyWith(fontWeight: FontWeight.bold),
+                  ),
+                ),
+                const SizedBox(height: 10),
+                Wrap(
+                  spacing: 6,
+                  children: _selectedPlayers.map((p) {
+                    final name = p['display_name'] ?? '';
+                    return Chip(
+                      label: Text(name),
+                      onDeleted: () => _togglePlayer(p),
+                      backgroundColor: chipBgColor,
+                      labelStyle: TextStyle(color: isDark ? Colors.white : Colors.black),
+                    );
+                  }).toList(),
+                ),
+                const SizedBox(height: 24),
+                buildGlassButton(
+                  label: 'Save Team',
+                  icon: Icons.save,
+                  onPressed: _isSubmitting ? () {} : _confirmAndSave,
+                  isLoading: _isSubmitting,
+                ),
+              ],
             ),
+          ),
+        ),
+      ),
     );
   }
 }

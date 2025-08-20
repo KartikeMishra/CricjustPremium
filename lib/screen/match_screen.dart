@@ -8,40 +8,87 @@ class MatchScreen extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final isDark = Theme.of(context).brightness == Brightness.dark;
-    final bgColor = Theme.of(context).scaffoldBackgroundColor;
-    final appBarColor =
-        Theme.of(context).appBarTheme.backgroundColor ??
-        (isDark ? Colors.black : Colors.white);
-    final tabTextColor = isDark ? Colors.white : AppColors.textPrimary;
-    final unselectedColor = isDark
-        ? Colors.grey[400]!
-        : AppColors.textSecondary;
 
     return DefaultTabController(
       length: 3,
       child: Scaffold(
-        backgroundColor: bgColor,
+        backgroundColor:
+        isDark ? Theme.of(context).scaffoldBackgroundColor : const Color(0xFFF4F6FA),
+
+        // Solid (opaque) segmented TabBar — no transparency
         appBar: PreferredSize(
-          preferredSize: const Size.fromHeight(50),
-          child: AppBar(
-            elevation: 1,
-            backgroundColor: appBarColor,
-            centerTitle: true,
-            automaticallyImplyLeading: false,
-            bottom: TabBar(
-              indicatorColor: AppColors.primary,
-              indicatorWeight: 3,
-              labelColor: tabTextColor,
-              unselectedLabelColor: unselectedColor,
-              labelStyle: const TextStyle(fontWeight: FontWeight.w600),
-              tabs: const [
-                Tab(text: 'Live'),
-                Tab(text: 'Upcoming'),
-                Tab(text: 'Recent'),
-              ],
+          preferredSize: const Size.fromHeight(kTextTabBarHeight + 16),
+          child: SafeArea(
+            bottom: false,
+            child: Padding(
+              padding: const EdgeInsets.fromLTRB(12, 8, 12, 8),
+              child: ClipRRect(
+                borderRadius: BorderRadius.circular(14),
+                clipBehavior: Clip.hardEdge,
+                child: Container(
+                  decoration: BoxDecoration(
+                    color: isDark ? const Color(0xFF2A2A2A) : Colors.white,
+                    borderRadius: BorderRadius.circular(14),
+                    border: Border.all(
+                      color: isDark ? Colors.white12 : Colors.black12,
+                    ),
+                    boxShadow: [
+                      if (!isDark)
+                        BoxShadow(
+                          color: Colors.black.withOpacity(0.06),
+                          blurRadius: 10,
+                          offset: const Offset(0, 4),
+                        ),
+                    ],
+                  ),
+                  child: TabBar(
+                    isScrollable: true,
+                    dividerColor: Colors.transparent,
+                    overlayColor:
+                    MaterialStateProperty.all(Colors.transparent),
+
+                    indicatorPadding: const EdgeInsets.symmetric(
+                      horizontal: 6,
+                      vertical: 6,
+                    ),
+                    indicatorSize: TabBarIndicatorSize.tab,
+                    indicator: const ShapeDecoration(
+                      color: Colors.white,
+                      shape: StadiumBorder(),
+                      shadows: [
+                        BoxShadow(
+                          color: Color(0x33000000),
+                          blurRadius: 8,
+                          offset: Offset(0, 3),
+                        ),
+                      ],
+                    ),
+
+                    labelPadding: const EdgeInsets.symmetric(horizontal: 16),
+                    labelColor: AppColors.primary,
+                    unselectedLabelColor:
+                    isDark ? Colors.white70 : Colors.black54,
+                    labelStyle: const TextStyle(
+                      fontSize: 17,
+                      fontWeight: FontWeight.w700,
+                    ),
+                    unselectedLabelStyle: const TextStyle(
+                      fontSize: 17,
+                      fontWeight: FontWeight.w600,
+                    ),
+
+                    tabs: const [
+                      Tab(text: 'Live'),
+                      Tab(text: 'Upcoming'),
+                      Tab(text: 'Recent'),
+                    ],
+                  ),
+                ),
+              ),
             ),
           ),
         ),
+
         body: const Padding(
           padding: EdgeInsets.only(top: 8),
           child: TabBarView(

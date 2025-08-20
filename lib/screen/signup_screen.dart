@@ -1,5 +1,6 @@
 import 'dart:convert';
 import 'dart:io';
+import 'package:flutter/gestures.dart'; // ⬅️ for TapGestureRecognizer
 import 'package:flutter/material.dart';
 import 'package:http/http.dart' as http;
 import 'package:image_cropper/image_cropper.dart';
@@ -7,6 +8,7 @@ import 'package:image_picker/image_picker.dart';
 import 'package:intl/intl.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:flutter/services.dart';
+import 'package:flutter_html/flutter_html.dart'; // ⬅️ render WP HTML
 import '../theme/color.dart';
 import '../theme/text_styles.dart';
 import 'home_screen.dart';
@@ -35,6 +37,9 @@ class _SignupScreenState extends State<SignupScreen> {
   String _passwordStrengthLabel = '';
   Color _passwordStrengthColor = Colors.red;
 
+  // ===== Terms & Privacy =====
+  bool _agreed = false;
+
   void _pickDate() async {
     final date = await showDatePicker(
       context: context,
@@ -46,8 +51,6 @@ class _SignupScreenState extends State<SignupScreen> {
       _dobCtrl.text = DateFormat('yyyy-MM-dd').format(date);
     }
   }
-
-
 
   void _checkPasswordStrength(String password) {
     double strength = 0;
@@ -78,6 +81,7 @@ class _SignupScreenState extends State<SignupScreen> {
       _passwordStrengthColor = color;
     });
   }
+
   Future<void> _pickAndCropImage() async {
     final source = await showModalBottomSheet<ImageSource>(
       context: context,
@@ -111,10 +115,8 @@ class _SignupScreenState extends State<SignupScreen> {
 
     final picker = ImagePicker();
     final pickedFile = await picker.pickImage(source: source, imageQuality: 80);
-
     if (pickedFile == null) return;
 
-    // 🔍 Optional: Show preview before cropping
     final confirm = await showDialog<bool>(
       context: context,
       builder: (_) => AlertDialog(
@@ -126,10 +128,8 @@ class _SignupScreenState extends State<SignupScreen> {
         ],
       ),
     );
-
     if (confirm != true) return;
 
-    // ✂️ Crop
     final croppedFile = await ImageCropper().cropImage(
       sourcePath: pickedFile.path,
       compressFormat: ImageCompressFormat.jpg,
@@ -153,9 +153,141 @@ class _SignupScreenState extends State<SignupScreen> {
     }
   }
 
+  // ===== Terms/Privacy helpers =====
+  Future<Map<String, String>> _fetchPage(int pageId) async {
+    final uri = Uri.parse(
+      'https://cricjust.in/wp-json/custom-api-for-cricket/get-page-content?page_id=$pageId',
+    );
+    final res = await http.get(uri);
+    Map<String, dynamic> map;
+    try {
+      map = json.decode(res.body) as Map<String, dynamic>;
+    } catch (_) {
+      throw Exception('HTTP ${res.statusCode}');
+    }
+    if (res.statusCode == 200 && map['status'] == 1 && map['data'] != null) {
+      final data = map['data'] as Map<String, dynamic>;
+      return {
+        'title': (data['post_title'] ?? '').toString(),
+        'content': (data['post_content'] ?? '').toString(),
+      };
+    }
+    throw Exception(map['message']?.toString() ?? 'Failed to load content');
+  }
+
+  void _openPolicySheet({required int pageId, required String fallbackTitle}) {
+    final dark = Theme.of(context).brightness == Brightness.dark;
+    showModalBottomSheet(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: Colors.transparent,
+      builder: (_) => SafeArea(
+        child: Container(
+          height: MediaQuery.of(context).size.height * 0.85,
+          decoration: BoxDecoration(
+            color: dark ? const Color(0xFF121212) : Colors.white,
+            borderRadius: const BorderRadius.vertical(top: Radius.circular(20)),
+          ),
+          child: Column(
+            children: [
+              // Header
+              Container(
+                height: 56,
+                decoration: BoxDecoration(
+                  gradient: dark
+                      ? null
+                      : const LinearGradient(
+                    colors: [Color(0xFF1976D2), Color(0xFF42A5F5)],
+                    begin: Alignment.topLeft,
+                    end: Alignment.bottomRight,
+                  ),
+                  color: dark ? const Color(0xFF1E1E1E) : null,
+                  borderRadius: const BorderRadius.vertical(top: Radius.circular(20)),
+                ),
+                child: Row(
+                  children: [
+                    const SizedBox(width: 8),
+                    IconButton(
+                      icon: const Icon(Icons.close, color: Colors.white),
+                      onPressed: () => Navigator.pop(context),
+                    ),
+                    const SizedBox(width: 8),
+                    Expanded(
+                      child: Text(
+                        fallbackTitle,
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        textAlign: TextAlign.center,
+                        style: const TextStyle(
+                            color: Colors.white, fontWeight: FontWeight.w700, fontSize: 18),
+                      ),
+                    ),
+                    const SizedBox(width: 56),
+                  ],
+                ),
+              ),
+              // Body
+              Expanded(
+                child: FutureBuilder<Map<String, String>>(
+                  future: _fetchPage(pageId),
+                  builder: (ctx, snap) {
+                    if (snap.connectionState == ConnectionState.waiting) {
+                      return const Center(child: CircularProgressIndicator());
+                    }
+                    if (snap.hasError || !snap.hasData) {
+                      return Center(
+                        child: Padding(
+                          padding: const EdgeInsets.all(16),
+                          child: Text(
+                            'Failed to load content.\n${snap.error ?? ''}',
+                            textAlign: TextAlign.center,
+                            style: TextStyle(
+                              color: dark ? Colors.white70 : Colors.black87,
+                            ),
+                          ),
+                        ),
+                      );
+                    }
+                    final title = snap.data!['title']!.isEmpty
+                        ? fallbackTitle
+                        : snap.data!['title']!;
+                    final html = snap.data!['content'] ?? '';
+                    return ListView(
+                      padding: const EdgeInsets.fromLTRB(16, 12, 16, 24),
+                      children: [
+                        Text(
+                          title,
+                          style: TextStyle(
+                            fontSize: 20,
+                            fontWeight: FontWeight.w800,
+                            color: dark ? Colors.white : Colors.black,
+                          ),
+                        ),
+                        const SizedBox(height: 12),
+                        Html(data: html),
+                      ],
+                    );
+                  },
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
 
   Future<void> _signup() async {
     if (!_formKey.currentState!.validate()) return;
+
+    // Block submission until user agrees
+    if (!_agreed) {
+      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
+        content: Text('Please accept the Terms & Conditions and Privacy Policy to continue.'),
+        backgroundColor: Colors.red,
+      ));
+      return;
+    }
 
     setState(() {
       _isLoading = true;
@@ -199,14 +331,12 @@ class _SignupScreenState extends State<SignupScreen> {
         await prefs.setString('userEmail', userData['user_email'] ?? '');
 
         String? uploadedUrl;
-        if (_profileImage != null) {
+        if (_profileImage != null && token != null) {
           final uploadUri = Uri.parse(
             'https://cricjust.in/wp-json/custom-api-for-cricket/upload-cricket-user-images?api_logged_in_token=$token',
           );
-
           final uploadRequest = http.MultipartRequest('POST', uploadUri)
             ..files.add(await http.MultipartFile.fromPath('user_profile_image', _profileImage!.path));
-
           final uploadResp = await uploadRequest.send();
           final uploadStr = await uploadResp.stream.bytesToString();
           final uploadData = json.decode(uploadStr);
@@ -218,7 +348,7 @@ class _SignupScreenState extends State<SignupScreen> {
           await prefs.setString('profilePic', extra['user_profile_image'] ?? '');
         }
 
-
+        if (!mounted) return;
         Navigator.of(context).pushAndRemoveUntil(
           MaterialPageRoute(builder: (_) => const HomeScreen()),
               (route) => false,
@@ -247,6 +377,12 @@ class _SignupScreenState extends State<SignupScreen> {
   @override
   Widget build(BuildContext context) {
     final isDark = Theme.of(context).brightness == Brightness.dark;
+
+    final linkStyle = TextStyle(
+      color: isDark ? Colors.lightBlueAccent : Colors.blue,
+      fontWeight: FontWeight.w600,
+      decoration: TextDecoration.underline,
+    );
 
     return Scaffold(
       backgroundColor: isDark ? Colors.black : const Color(0xFFE3F2FD),
@@ -283,30 +419,28 @@ class _SignupScreenState extends State<SignupScreen> {
             key: _formKey,
             child: Column(
               children: [
-                // 👇 Image Picker with cropping preview
+                // Avatar
                 GestureDetector(
                   onTap: _pickAndCropImage,
                   child: CircleAvatar(
                     radius: 48,
                     backgroundColor: Colors.grey[300],
-                    backgroundImage:
-                    _profileImage != null ? FileImage(_profileImage!) : null,
+                    backgroundImage: _profileImage != null ? FileImage(_profileImage!) : null,
                     child: _profileImage == null
                         ? const Icon(Icons.camera_alt, color: Colors.white, size: 30)
                         : null,
                   ),
                 ),
-
                 const SizedBox(height: 16),
 
-// 👇 App Logo
+                // Logo
                 Image.asset(
                   isDark ? 'lib/asset/images/Theme1.png' : 'lib/asset/images/cricjust_logo.png',
                   height: 80,
                 ),
                 const SizedBox(height: 20),
 
-                const SizedBox(height: 20),
+                // Fields
                 TextFormField(
                   controller: _nameCtrl,
                   decoration: _decoration('Full Name'),
@@ -317,7 +451,7 @@ class _SignupScreenState extends State<SignupScreen> {
                   controller: _emailCtrl,
                   decoration: _decoration('Email'),
                   keyboardType: TextInputType.emailAddress,
-                  validator: (v) => v == null || !RegExp(r"^[\w-\.]+@([\w-]+\.)+[\w]{2,4}").hasMatch(v)
+                  validator: (v) => v == null || !RegExp(r"^[\w-\.]+@([\w-]+\.)+[\w]{2,4}$").hasMatch(v)
                       ? 'Enter valid email'
                       : null,
                 ),
@@ -356,7 +490,7 @@ class _SignupScreenState extends State<SignupScreen> {
                 DropdownButtonFormField<String>(
                   decoration: _decoration('User Type'),
                   value: _userType,
-                  items: [
+                  items: const [
                     DropdownMenuItem(value: 'cricket_player', child: Text('Player')),
                     DropdownMenuItem(value: 'cricket_umpire', child: Text('Umpire')),
                     DropdownMenuItem(value: 'cricket_scorer', child: Text('Scorer')),
@@ -375,7 +509,9 @@ class _SignupScreenState extends State<SignupScreen> {
                     value: _playerType,
                     items: ['All-Rounder', 'Batter', 'Bowler', 'Wicket-Keeper']
                         .map((e) => DropdownMenuItem(
-                        value: e.toLowerCase().replaceAll('-', '_'), child: Text(e)))
+                      value: e.toLowerCase().replaceAll('-', '_'),
+                      child: Text(e),
+                    ))
                         .toList(),
                     onChanged: (val) => setState(() => _playerType = val),
                     validator: (v) => v == null ? 'Select player type' : null,
@@ -412,10 +548,8 @@ class _SignupScreenState extends State<SignupScreen> {
                   onChanged: _checkPasswordStrength,
                   decoration: _decoration('Password').copyWith(
                     suffixIcon: IconButton(
-                      icon:
-                      Icon(_obscurePassword ? Icons.visibility_off : Icons.visibility),
-                      onPressed: () =>
-                          setState(() => _obscurePassword = !_obscurePassword),
+                      icon: Icon(_obscurePassword ? Icons.visibility_off : Icons.visibility),
+                      onPressed: () => setState(() => _obscurePassword = !_obscurePassword),
                     ),
                   ),
                   validator: (v) => v == null || v.length < 6 ? 'Min 6 characters' : null,
@@ -432,35 +566,75 @@ class _SignupScreenState extends State<SignupScreen> {
                   alignment: Alignment.centerRight,
                   child: Text(
                     _passwordStrengthLabel,
-                    style: TextStyle(
-                      color: _passwordStrengthColor,
-                      fontWeight: FontWeight.w600,
-                    ),
+                    style: TextStyle(color: _passwordStrengthColor, fontWeight: FontWeight.w600),
                   ),
                 ),
                 const SizedBox(height: 12),
-                if (_errorMessage != null)
+
+                // ===== Terms & Privacy row =====
+                Row(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Checkbox(
+                      value: _agreed,
+                      onChanged: (v) => setState(() => _agreed = v ?? false),
+                      activeColor: AppColors.primary,
+                    ),
+                    Expanded(
+                      child: RichText(
+                        text: TextSpan(
+                          style: Theme.of(context).textTheme.bodyMedium,
+                          children: [
+                            const TextSpan(text: 'I agree to the '),
+                            TextSpan(
+                              text: 'Terms & Conditions',
+                              style: linkStyle,
+                              recognizer: TapGestureRecognizer()
+                                ..onTap = () => _openPolicySheet(
+                                  pageId: 544,
+                                  fallbackTitle: 'Terms & Conditions',
+                                ),
+                            ),
+                            const TextSpan(text: ' and '),
+                            TextSpan(
+                              text: 'Privacy Policy',
+                              style: linkStyle,
+                              recognizer: TapGestureRecognizer()
+                                ..onTap = () => _openPolicySheet(
+                                  pageId: 3,
+                                  fallbackTitle: 'Privacy Policy',
+                                ),
+                            ),
+                            const TextSpan(text: '.'),
+                          ],
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+
+                if (_errorMessage != null) ...[
+                  const SizedBox(height: 8),
                   Text(_errorMessage!, style: const TextStyle(color: Colors.red)),
+                ],
                 const SizedBox(height: 12),
+
+                // Submit
                 SizedBox(
                   width: double.infinity,
                   height: 48,
                   child: ElevatedButton(
                     style: ElevatedButton.styleFrom(
                       backgroundColor: AppColors.primary,
-                      shape: RoundedRectangleBorder(
-                        borderRadius: BorderRadius.circular(12),
-                      ),
+                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
                     ),
                     onPressed: _isLoading ? null : _signup,
                     child: _isLoading
                         ? const CircularProgressIndicator(color: Colors.white)
-                        : const Text(
-                      'Sign Up',
-                      style: TextStyle(color: Colors.white, fontSize: 16),
-                    ),
+                        : const Text('Sign Up', style: TextStyle(color: Colors.white, fontSize: 16)),
                   ),
                 ),
+
                 const SizedBox(height: 16),
                 Row(
                   mainAxisAlignment: MainAxisAlignment.center,

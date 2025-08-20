@@ -102,7 +102,7 @@ class _TournamentMatchesSectionState extends State<TournamentMatchesSection>
         final m = _matches[index];
         final dt =
             DateTime.tryParse('${m.matchDate} ${m.matchTime}') ??
-            DateTime.now();
+                DateTime.now();
 
         final animation = Tween<double>(begin: 0, end: 1).animate(
           CurvedAnimation(

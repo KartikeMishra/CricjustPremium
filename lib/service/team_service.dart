@@ -14,13 +14,15 @@ class TeamService {
     int limit = 20,
     int skip = 0,
     String search = '',
-    int? tournamentId, // ✅ Add this
+    int? tournamentId,
   }) async {
     final uri = Uri.parse(
-      '$_base/get-teams?api_logged_in_token=$apiToken'
-      '&limit=$limit&skip=$skip'
-      '&search=$search'
-      '${tournamentId != null ? '&tournament_id=$tournamentId' : ''}', // ✅ Append if present
+      '$_base/get-teams'
+          '?api_logged_in_token=$apiToken'
+          '&limit=$limit'
+          '&skip=$skip'
+          '&search=${Uri.encodeQueryComponent(search)}'
+          '${tournamentId != null ? '&tournament_id=$tournamentId' : ''}',
     );
 
     final response = await http.get(uri);
@@ -31,10 +33,10 @@ class TeamService {
     if (body['status'] != 1) {
       throw Exception('API error: ${body['message']}');
     }
-
     final List data = body['data'] ?? [];
-    return data.map((json) => TeamModel.fromJson(json)).toList();
+    return data.map((j) => TeamModel.fromJson(j)).toList();
   }
+
 
   /// Fetch a single team’s details by ID using the single-team endpoint
   static Future<TeamModel?> fetchTeamDetail({
@@ -77,6 +79,7 @@ class TeamService {
 
   /// Update team details (name, description, origin)
   /// Update team details including player list
+// lib/service/team_service.dart
   static Future<bool> updateTeam({
     required int teamId,
     required String apiToken,
@@ -84,6 +87,7 @@ class TeamService {
     required String description,
     required String origin,
     required List<int> playerIds,
+    String? logoUrl, // <-- add this optional param
   }) async {
     final uri = Uri.parse(
       '$_base/update-team?api_logged_in_token=$apiToken&team_id=$teamId',
@@ -95,24 +99,20 @@ class TeamService {
       'team_origin': origin,
     };
 
+    if (logoUrl != null && logoUrl.isNotEmpty) {
+      body['team_logo'] = logoUrl; // <-- send to API
+    }
+
     for (int i = 0; i < playerIds.length; i++) {
       body['team_players[$i]'] = playerIds[i].toString();
     }
 
-    try {
-      final response = await http.post(uri, body: body);
-      print('📡 [UPDATE TEAM] Status: ${response.statusCode}');
-      print('📥 [UPDATE TEAM] Response Body: ${response.body}');
-
-      if (response.statusCode != 200) return false;
-
-      final jsonResponse = json.decode(response.body);
-      return jsonResponse['status'] == 1;
-    } catch (e) {
-      print('🚨 Error in updateTeam: $e');
-      return false;
-    }
+    final response = await http.post(uri, body: body);
+    if (response.statusCode != 200) return false;
+    final jsonResponse = json.decode(response.body);
+    return jsonResponse['status'] == 1;
   }
+
 
   /// Add a new team with players (supports optional tournament_id)
   static Future<bool> addTeam({

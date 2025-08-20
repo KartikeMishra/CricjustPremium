@@ -15,6 +15,13 @@ class ScoringInputs extends StatelessWidget {
   final VoidCallback? onViewMatch;
   final Future<Map<String, dynamic>?> Function()? onChangeWicketKeeper;
 
+  // NEW: ask parent to show Shot Type dialog & receive the choice
+  final Future<String?> Function(int runs)? onSelectShotType;
+  final ValueChanged<String?>? onShotChosen;
+
+  // NEW: skip asking shot on dot balls unless you want it
+  final bool askShotOnZero;
+
   const ScoringInputs({
     super.key,
     required this.selectedRuns,
@@ -30,18 +37,39 @@ class ScoringInputs extends StatelessWidget {
     required this.onEndMatch,
     this.onChangeWicketKeeper,
     this.onViewMatch,
+    this.onSelectShotType,     // NEW
+    this.onShotChosen,         // NEW
+    this.askShotOnZero = false // NEW
   });
 
   @override
   Widget build(BuildContext context) {
     final isDark = Theme.of(context).brightness == Brightness.dark;
 
+    Future<void> _handleRunTap(int r) async {
+      if (isSubmitting) return;
+
+      // If parent provided a dialog trigger, call it first
+      if (onSelectShotType != null) {
+        if (r == 0 && !askShotOnZero) {
+          onRunSelected(r);
+          return;
+        }
+        final shot = await onSelectShotType!(r);
+        if (shot == null) return; // user cancelled
+        onShotChosen?.call(shot);
+      }
+
+      // Proceed to parent handler (will submit)
+      onRunSelected(r);
+    }
+
     Widget runChip(int r) {
       final selected = selectedRuns == r;
       return ChoiceChip(
         label: Text('$r'),
         selected: selected,
-        onSelected: (_) => onRunSelected(r),
+        onSelected: (_) => _handleRunTap(r), // CHANGED
         selectedColor: Colors.orange,
         backgroundColor: isDark ? Colors.grey[800] : Colors.grey[200],
         labelStyle: TextStyle(
@@ -57,6 +85,8 @@ class ScoringInputs extends StatelessWidget {
         label: const Text('+'),
         selected: false,
         onSelected: (_) async {
+          if (isSubmitting) return;
+
           final controller = TextEditingController();
           final result = await showDialog<int>(
             context: context,
@@ -79,13 +109,26 @@ class ScoringInputs extends StatelessWidget {
               ],
             ),
           );
-          if (result != null) onRunSelected(result);
+          if (result == null) return;
+
+          // Ask shot type for custom runs too
+          if (onSelectShotType != null) {
+            if (result == 0 && !askShotOnZero) {
+              onRunSelected(result);
+              return;
+            }
+            final shot = await onSelectShotType!(result);
+            if (shot == null) return; // cancelled
+            onShotChosen?.call(shot);
+          }
+
+          onRunSelected(result);
         },
         backgroundColor: isDark ? Colors.grey[800] : Colors.grey[200],
       );
     }
+
     Color _extraColor(String type, bool selected, bool isDark) {
-      // pick base color by extra type
       final base = () {
         switch (type) {
           case 'Wide':    return Colors.green;
@@ -95,11 +138,7 @@ class ScoringInputs extends StatelessWidget {
           default:        return Colors.grey;
         }
       }();
-
-      // lighten when not selected, or dark theme
-      return selected
-          ? base
-          : (isDark ? base.withOpacity(0.4) : base.withOpacity(0.2));
+      return selected ? base : (isDark ? base.withOpacity(0.4) : base.withOpacity(0.2));
     }
 
     Widget extraChip(String value, String shown) {
@@ -128,7 +167,6 @@ class ScoringInputs extends StatelessWidget {
         padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
       );
     }
-
 
     return SingleChildScrollView(
       padding: const EdgeInsets.only(bottom: 8),

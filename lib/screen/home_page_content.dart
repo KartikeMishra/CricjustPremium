@@ -1,5 +1,6 @@
 // lib/widget/home_page_content.dart
 
+import 'package:cricjust_premium/screen/video_gallery_screen.dart';
 import 'package:flutter/material.dart';
 import 'package:shimmer/shimmer.dart';
 
@@ -12,6 +13,9 @@ import '../widget/upcoming_matches_section.dart';
 import '../widget/recent_matches_section.dart';
 import '../widget/posts_section.dart';
 import '../theme/color.dart'; // for AppColors.primary
+import '../service/youtube_video_service.dart';
+import '../model/youtube_video_model.dart';
+import '../widget/video_card.dart';
 
 class HomePageContent extends StatefulWidget {
   final VoidCallback onLoadMoreTap;
@@ -33,6 +37,9 @@ class _HomePageContentState extends State<HomePageContent>
   bool _hasUpcoming = true;
   bool _hasRecent = true;
   bool _hasPosts = true;
+
+  // ⬇️ NEW: videos visibility flag
+  bool _hasVideos = true;
 
   @override
   void initState() {
@@ -61,6 +68,10 @@ class _HomePageContentState extends State<HomePageContent>
         case 'posts':
           _hasPosts = hasData;
           break;
+      // ⬇️ NEW
+        case 'videos':
+          _hasVideos = hasData;
+          break;
       }
     });
   }
@@ -69,7 +80,7 @@ class _HomePageContentState extends State<HomePageContent>
     setState(() {
       _refreshing = true;
       _loading = true;
-      _hasLive = _hasTournament = _hasUpcoming = _hasRecent = _hasPosts = true;
+      _hasLive = _hasTournament = _hasUpcoming = _hasRecent = _hasPosts = _hasVideos = true;
     });
     await Future.delayed(const Duration(seconds: 1));
     setState(() {
@@ -101,11 +112,11 @@ class _HomePageContentState extends State<HomePageContent>
   }
 
   Widget _buildSection(
-    String title,
-    IconData icon,
-    Widget content, {
-    VoidCallback? onSeeAll,
-  }) {
+      String title,
+      IconData icon,
+      Widget content, {
+        VoidCallback? onSeeAll,
+      }) {
     final isDark = Theme.of(context).brightness == Brightness.dark;
 
     final iconColor = title.contains('Live')
@@ -124,12 +135,12 @@ class _HomePageContentState extends State<HomePageContent>
           boxShadow: isDark
               ? []
               : [
-                  BoxShadow(
-                    color: Colors.black.withOpacity(0.06),
-                    blurRadius: 12,
-                    offset: const Offset(0, 6),
-                  ),
-                ],
+            BoxShadow(
+              color: Colors.black.withOpacity(0.06),
+              blurRadius: 12,
+              offset: const Offset(0, 6),
+            ),
+          ],
         ),
         child: Padding(
           padding: const EdgeInsets.symmetric(vertical: 16, horizontal: 16),
@@ -230,6 +241,23 @@ class _HomePageContentState extends State<HomePageContent>
             );
           },
         ),
+
+      // ⬇️ NEW: Videos section (exactly 5 items)
+      if (_hasVideos)
+        _buildSection(
+          'Videos',
+          Icons.ondemand_video_rounded,
+          _VideosFive(
+            onDataLoaded: (hasData) => _onSectionDataLoaded('videos', hasData),
+          ),
+          onSeeAll: () {
+            Navigator.push(
+              context,
+              MaterialPageRoute(builder: (_) => const VideoGalleryScreen()),
+            );
+          },
+        ),
+
       if (_hasUpcoming)
         _buildSection(
           'Upcoming Matches',
@@ -302,5 +330,123 @@ class _HomePageContentState extends State<HomePageContent>
   void dispose() {
     _animationController.dispose();
     super.dispose();
+  }
+}
+
+// -----------------------------------------------------------------------------
+// Compact videos content for Home: fetch 5 items, show a carousel with dots.
+// -----------------------------------------------------------------------------
+class _VideosFive extends StatefulWidget {
+  final ValueChanged<bool>? onDataLoaded;
+  const _VideosFive({this.onDataLoaded});
+
+  @override
+  State<_VideosFive> createState() => _VideosFiveState();
+}
+
+class _VideosFiveState extends State<_VideosFive> {
+  late Future<List<YoutubeVideo>> _future;
+  final _page = PageController(viewportFraction: 0.90);
+  int _index = 0;
+
+  @override
+  void initState() {
+    super.initState();
+    _future = YoutubeVideoService.fetch(limit: 5, skip: 0);
+  }
+
+  @override
+  void dispose() {
+    _page.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+
+    return FutureBuilder<List<YoutubeVideo>>(
+      future: _future,
+      builder: (context, snap) {
+        if (snap.connectionState == ConnectionState.waiting) {
+          // simple loading skeleton
+          return SizedBox(
+            height: 210,
+            child: ListView.separated(
+              scrollDirection: Axis.horizontal,
+              padding: const EdgeInsets.symmetric(horizontal: 4),
+              itemBuilder: (_, __) => Shimmer.fromColors(
+                baseColor: isDark ? Colors.white10 : Colors.black12,
+                highlightColor: isDark ? Colors.white24 : Colors.black26,
+                child: Container(
+                  width: 300,
+                  decoration: BoxDecoration(
+                    color: Colors.white,
+                    borderRadius: BorderRadius.circular(18),
+                  ),
+                ),
+              ),
+              separatorBuilder: (_, __) => const SizedBox(width: 12),
+              itemCount: 3,
+            ),
+          );
+        }
+
+        if (snap.hasError) {
+          WidgetsBinding.instance.addPostFrameCallback((_) {
+            widget.onDataLoaded?.call(false);
+          });
+          return const Padding(
+            padding: EdgeInsets.all(12),
+            child: Text('Failed to load videos'),
+          );
+        }
+
+        final items = snap.data ?? const <YoutubeVideo>[];
+        WidgetsBinding.instance.addPostFrameCallback((_) {
+          widget.onDataLoaded?.call(items.isNotEmpty);
+        });
+
+        if (items.isEmpty) {
+          return const Padding(
+            padding: EdgeInsets.all(12),
+            child: Text('No videos available'),
+          );
+        }
+
+        return Column(
+          children: [
+            SizedBox(
+              height: 210,
+              child: PageView.builder(
+                controller: _page,
+                onPageChanged: (i) => setState(() => _index = i),
+                itemCount: items.length,
+                itemBuilder: (_, i) => VideoCard(video: items[i]),
+              ),
+            ),
+            const SizedBox(height: 10),
+            Row(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: List.generate(items.length, (i) {
+                final active = i == _index;
+                return AnimatedContainer(
+                  duration: const Duration(milliseconds: 250),
+                  margin: const EdgeInsets.symmetric(horizontal: 4),
+                  height: 6,
+                  width: active ? 18 : 6,
+                  decoration: BoxDecoration(
+                    color: active
+                        ? (isDark ? Colors.white : AppColors.primary)
+                        : (isDark ? Colors.white24 : Colors.black12),
+                    borderRadius: BorderRadius.circular(10),
+                  ),
+                );
+              }),
+            ),
+          ],
+        );
+      },
+    );
   }
 }
