@@ -1,18 +1,25 @@
+import java.util.Properties
+
 plugins {
     id("com.android.application")
     id("org.jetbrains.kotlin.android")
-    id("dev.flutter.flutter-gradle-plugin") // keep after the two above
+    id("dev.flutter.flutter-gradle-plugin")
+}
+
+val keystorePropsFile = rootProject.file("key.properties")
+val keystoreProps = Properties().apply {
+    if (keystorePropsFile.exists()) load(keystorePropsFile.inputStream())
 }
 
 android {
     namespace = "com.cricjust.app"
     compileSdk = 36
+    ndkVersion = "27.0.12077973"
 
     defaultConfig {
-        applicationId = "com.cricjust.app"
+        applicationId = "com.cricjust.app"   // must match Play listing
         minSdk = flutter.minSdkVersion
-        //noinspection OldTargetApi
-        targetSdk = 35
+        targetSdk = 35                       // set explicitly
         versionCode = flutter.versionCode
         versionName = flutter.versionName
     }
@@ -24,46 +31,28 @@ android {
     kotlinOptions { jvmTarget = "17" }
 
     signingConfigs {
-        create("release") {
-            // change if your keystore lives elsewhere
-            storeFile = file("$projectDir/cricjust.jks")
-            storePassword = "cricjust"
-            keyAlias = "cricjust"
-            keyPassword = "cricjust"
-        }
-    }
-    splits {
-        abi {
-            isEnable = true
-            reset()
-            include("armeabi-v7a", "arm64-v8a", "x86", "x86_64")
-            isUniversalApk = false
-        }
-    }
-
-    packaging {
-        resources {
-            excludes += setOf(
-                "/META-INF/{AL2.0,LGPL2.1}",
-                "META-INF/DEPENDENCIES","META-INF/LICENSE","META-INF/LICENSE.txt",
-                "META-INF/license.txt","META-INF/NOTICE","META-INF/NOTICE.txt",
-                "META-INF/notice.txt","META-INF/INDEX.LIST"
-            )
+        if (keystorePropsFile.exists()) {
+            create("release") {
+                storeFile = file(keystoreProps["storeFile"]!!.toString())
+                storePassword = keystoreProps["storePassword"]!!.toString()
+                keyAlias = keystoreProps["keyAlias"]!!.toString()
+                keyPassword = keystoreProps["keyPassword"]!!.toString()
+            }
         }
     }
 
     buildTypes {
         getByName("release") {
-            signingConfig = signingConfigs.getByName("release")
-            isMinifyEnabled = true        // ✅ first build: keep false
-            isShrinkResources = true      // ✅ first build: keep false
+            signingConfig = signingConfigs.findByName("release") ?: signingConfigs.getByName("debug")
+            // you can flip these to true later once everything is stable
+            isMinifyEnabled = false
+            isShrinkResources = false
             proguardFiles(
                 getDefaultProguardFile("proguard-android-optimize.txt"),
                 "proguard-rules.pro"
             )
         }
-        getByName("debug") {
-            // nothing special
-        }
     }
 }
+
+flutter { source = "../.." }

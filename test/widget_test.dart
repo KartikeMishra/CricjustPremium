@@ -4,8 +4,8 @@ import 'package:shimmer/main.dart';
 
 void main() {
   testWidgets('App launches and renders MaterialApp', (
-    WidgetTester tester,
-  ) async {
+      WidgetTester tester,
+      ) async {
     await tester.pumpWidget(const MyApp());
 
     // Verify MaterialApp is present

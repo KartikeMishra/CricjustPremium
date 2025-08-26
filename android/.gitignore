@@ -1,29 +1,14 @@
-# Flutter / Dart
-.dart_tool/
-.packages
-.pub-cache/
-build/
-**/build/
-flutter_export_environment.sh
+gradle-wrapper.jar
+/.gradle
+/captures/
+/gradlew
+/gradlew.bat
+/local.properties
+GeneratedPluginRegistrant.java
+.cxx/
 
-# Android
-android/.cxx/
-android/local.properties
-android/key.properties
-android/app/build/
-android/build/
-*.apk
-*.aab
-
-# iOS / macOS / Windows / Linux generated
-ios/Flutter/Flutter.framework
-ios/Flutter/Flutter.podspec
-ios/Runner/GeneratedPluginRegistrant.*
-macos/Flutter/ephemeral/
-windows/flutter/ephemeral/
-linux/flutter/ephemeral/
-
-# Misc
-*.iml
-.idea/
-.gradle/
+# Remember to never publicly share your keystore.
+# See https://flutter.dev/to/reference-keystore
+key.properties
+**/*.keystore
+**/*.jks
