@@ -1,0 +1,29 @@
+# Flutter / Dart
+.dart_tool/
+.packages
+.pub-cache/
+build/
+**/build/
+flutter_export_environment.sh
+
+# Android
+android/.cxx/
+android/local.properties
+android/key.properties
+android/app/build/
+android/build/
+*.apk
+*.aab
+
+# iOS / macOS / Windows / Linux generated
+ios/Flutter/Flutter.framework
+ios/Flutter/Flutter.podspec
+ios/Runner/GeneratedPluginRegistrant.*
+macos/Flutter/ephemeral/
+windows/flutter/ephemeral/
+linux/flutter/ephemeral/
+
+# Misc
+*.iml
+.idea/
+.gradle/

@@ -1,0 +1,2 @@
+/Users/kartikeymishra/StudioProjects/cricjust_premium/android/app/.cxx/RelWithDebInfo/o2p6x662/x86/CMakeFiles/edit_cache.dir
+/Users/kartikeymishra/StudioProjects/cricjust_premium/android/app/.cxx/RelWithDebInfo/o2p6x662/x86/CMakeFiles/rebuild_cache.dir
