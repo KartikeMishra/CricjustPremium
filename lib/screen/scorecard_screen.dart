@@ -73,18 +73,22 @@ class _ScorecardScreenState extends State<ScorecardScreen> {
                   _buildTabSelector(firstTeam.teamName, secondTeam.teamName, isDark),
                   const SizedBox(height: 8),
                   Expanded(
-                    child: TabBarView(
-                      children: [
-                        RefreshIndicator(
-                          onRefresh: _refreshScorecard,
-                          child: _buildInningContent(firstTeam, secondTeam, isDark),
-                        ),
-                        RefreshIndicator(
-                          onRefresh: _refreshScorecard,
-                          child: _buildInningContent(secondTeam, firstTeam, isDark),
-                        ),
-                      ],
+                    child: Expanded(
+                      child: TabBarView(
+                        physics: const BouncingScrollPhysics(), // optional
+                        children: [
+                          RefreshIndicator(
+                            onRefresh: _refreshScorecard,
+                            child: _buildInningContent(firstTeam, secondTeam, isDark),
+                          ),
+                          RefreshIndicator(
+                            onRefresh: _refreshScorecard,
+                            child: _buildInningContent(secondTeam, firstTeam, isDark),
+                          ),
+                        ],
+                      ),
                     ),
+
                   ),
                 ],
               ),

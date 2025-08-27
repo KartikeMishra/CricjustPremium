@@ -33,12 +33,12 @@ class FullMatchDetail extends StatefulWidget {
 
 enum _HeaderPanel { none, tv, youtube }
 
-class _FullMatchDetailState extends State<FullMatchDetail>
-    with SingleTickerProviderStateMixin {
-  late TabController _tabController;
+class _FullMatchDetailState extends State<FullMatchDetail> {
   Timer? _autoRefreshTimer;
 
   MatchSummary? summaryData;
+  Map<String, dynamic>? _fallbackMatchData; // meta if summary fetch fails
+
   bool isLoading = true;
   String? error;
   int? _currentUserId;
@@ -55,33 +55,30 @@ class _FullMatchDetailState extends State<FullMatchDetail>
   // 🔄 pull-to-refresh tick (for Stats tab)
   int _refreshTick = 0;
 
-  final List<Tab> _tabs = const [
-    Tab(text: 'Summary'),
-    Tab(text: 'Scorecard'),
-    Tab(text: 'Squad'),
-    Tab(text: 'Stats'),
-    Tab(text: 'Info'),
-    Tab(text: 'Commentary'),
-  ];
+  // ✅ Summary tab only when completed AND we have summary
+  bool _showSummaryTab = false;
+
+  // Preserve current tab when the tab count changes
+  int _savedTabIndex = 0;
 
   @override
   void initState() {
     super.initState();
     _loadCurrentUser();
-    _tabController = TabController(length: _tabs.length, vsync: this);
     _loadSummaryData();
     _fetchLiveScore();
     _loadSponsors();
 
     _autoRefreshTimer = Timer.periodic(const Duration(seconds: 10), (_) {
       _fetchLiveScore();
+      // You can also re-check summary at intervals if desired:
+      // _loadSummaryData();
     });
   }
 
   @override
   void dispose() {
     _autoRefreshTimer?.cancel();
-    _tabController.dispose();
     super.dispose();
   }
 
@@ -109,18 +106,68 @@ class _FullMatchDetailState extends State<FullMatchDetail>
     try {
       final result = await MatchService.fetchMatchSummary(widget.matchId);
       if (!mounted) return;
+
+      final raw = result.rawMatchData;
+
+      // ✅ Trust status for completion; avoid heuristics that can mark live as "completed"
+      final bool isCompleted = _isCompletedValue(raw['status']);
+
+      // ✅ Only show if we truly have summary content
+      final hasSummary = result.rawSummary != null &&
+          (result.rawSummary is Map ? (result.rawSummary as Map).isNotEmpty : true);
+
       setState(() {
         summaryData = result;
+        _fallbackMatchData = null;
         isLoading = false;
         error = null;
+        _showSummaryTab = isCompleted && hasSummary;
       });
-    } catch (_) {
+    } catch (e, st) {
+      debugPrint('❌ fetchMatchSummary failed: $e\n$st');
+      final meta = await _fetchMatchMetaFallback();
       if (!mounted) return;
-      setState(() {
-        error = 'Failed to load match detail.';
-        isLoading = false;
-      });
+
+      if (meta != null) {
+        setState(() {
+          summaryData = null;
+          _fallbackMatchData = meta;
+          isLoading = false;
+          error = null;
+          _showSummaryTab = false; // no summary available on fallback
+        });
+      } else {
+        if (!mounted) return;
+        setState(() {
+          error = 'Failed to load match detail.';
+          isLoading = false;
+        });
+      }
     }
+  }
+
+  Future<Map<String, dynamic>?> _fetchMatchMetaFallback() async {
+    try {
+      final token = _token;
+      final uri = Uri.parse(
+        'https://cricjust.in/wp-json/custom-api-for-cricket/get-single-cricket-match'
+            '${(token != null && token.isNotEmpty) ? '?api_logged_in_token=$token&' : '?'}match_id=${widget.matchId}',
+      );
+      final res = await http.get(uri).timeout(const Duration(seconds: 20));
+      if (res.statusCode == 200) {
+        final json = jsonDecode(res.body) as Map<String, dynamic>;
+        if ((json['status'] == 1 || json['status'] == '1') &&
+            json['data'] is List &&
+            (json['data'] as List).isNotEmpty) {
+          return (json['data'] as List).first as Map<String, dynamic>;
+        }
+      } else {
+        debugPrint('❌ fallback meta HTTP ${res.statusCode}: ${res.body}');
+      }
+    } catch (e, st) {
+      debugPrint('❌ _fetchMatchMetaFallback error: $e\n$st');
+    }
+    return null;
   }
 
   Future<void> _fetchLiveScore() async {
@@ -131,34 +178,21 @@ class _FullMatchDetailState extends State<FullMatchDetail>
       final response = await http.get(url);
       if (response.statusCode == 200) {
         final data = jsonDecode(response.body);
-        if (data['status'] == 1 &&
-            data['current_score']?['current_inning'] != null) {
-          final inning = Map<String, dynamic>.from(
-            data['current_score']['current_inning'],
-          );
-
-          // inject last_ball if missing
+        if (data['status'] == 1 && data['current_score']?['current_inning'] != null) {
+          final inning = Map<String, dynamic>.from(data['current_score']['current_inning']);
           if (inning['score'] != null) {
             inning['score'] = Map<String, dynamic>.from(inning['score'] as Map);
-            if (!inning['score'].containsKey('last_ball') ||
-                inning['score']['last_ball'] == null) {
+            if (!inning['score'].containsKey('last_ball') || inning['score']['last_ball'] == null) {
               final teamId = inning['team_id'];
               final lastBalls = await MatchScoreService.fetchLastSixBalls(
                 matchId: widget.matchId,
                 teamId: teamId,
               );
-              if (lastBalls.isNotEmpty) {
-                final latest = lastBalls.first;
-                inning['score']['last_ball'] = latest['runs'].toString();
-              } else {
-                inning['score']['last_ball'] = '0';
-              }
+              inning['score']['last_ball'] =
+              lastBalls.isNotEmpty ? lastBalls.first['runs'].toString() : '0';
             }
           }
-
-          if (mounted) {
-            setState(() => _liveScore = inning);
-          }
+          if (mounted) setState(() => _liveScore = inning);
         }
       }
     } catch (e) {
@@ -214,9 +248,7 @@ class _FullMatchDetailState extends State<FullMatchDetail>
             (json['data'] as List).isNotEmpty) {
           final first = (json['data'] as List).first as Map<String, dynamic>;
           final url = _normalizeYoutube(first['youtube']);
-          if (mounted) {
-            setState(() => _youtubeUrl = (url != null && url.isNotEmpty) ? url : null);
-          }
+          if (mounted) setState(() => _youtubeUrl = (url != null && url.isNotEmpty) ? url : null);
         }
       }
     } catch (e) {
@@ -231,18 +263,23 @@ class _FullMatchDetailState extends State<FullMatchDetail>
     final int oversDone = (score['overs_done'] ?? 0) is int
         ? score['overs_done']
         : int.tryParse(score['overs_done'].toString()) ?? 0;
-
     final int ballsDone = int.tryParse(score['balls_done'].toString()) ?? 0;
     return double.tryParse('$oversDone.$ballsDone') ?? oversDone.toDouble();
   }
 
   bool _isLiveValue(dynamic v) {
     final s = v?.toString().trim().toLowerCase();
-    return s == 'live' ||
-        s == 'inprogress' ||
-        s == 'in_progress' ||
-        s == 'running' ||
-        s == '1';
+    return s == 'live' || s == 'inprogress' || s == 'in_progress' || s == 'running' || s == '1';
+  }
+
+  bool _isCompletedValue(dynamic v) {
+    final s = v?.toString().trim().toLowerCase();
+    return s == 'completed' ||
+        s == 'complete' ||
+        s == 'finished' ||
+        s == 'ended' ||
+        s == 'result' ||
+        s == '2';
   }
 
   bool _isYoutubeUrl(String? u) {
@@ -280,6 +317,43 @@ class _FullMatchDetailState extends State<FullMatchDetail>
     return s;
   }
 
+  DateTime? _safeParseMatchDateTime(Map<String, dynamic> raw) {
+    String? d = raw['match_date']?.toString().trim();
+    String? t = raw['match_time']?.toString().trim();
+    if ((d == null || d.isEmpty) && (t == null || t.isEmpty)) return null;
+
+    final candidates = <String>[
+      if (d != null && d.isNotEmpty && t != null && t.isNotEmpty) '$d $t',
+      if (d != null && d.isNotEmpty) d,
+    ];
+    final fmts = <String>[
+      'yyyy-MM-dd HH:mm:ss',
+      'yyyy-MM-dd HH:mm',
+      'dd-MM-yyyy HH:mm:ss',
+      'dd-MM-yyyy HH:mm',
+      'yyyy/MM/dd HH:mm:ss',
+      'yyyy/MM/dd HH:mm',
+      'yyyy-MM-dd',
+      'dd-MM-yyyy',
+      'yyyy/MM/dd',
+    ];
+
+    for (final s in candidates) {
+      for (final f in fmts) {
+        try {
+          return DateFormat(f).parseStrict(s);
+        } catch (_) {}
+      }
+    }
+    return null;
+  }
+
+  int _toInt(dynamic v) {
+    if (v is int) return v;
+    if (v is String) return int.tryParse(v) ?? 0;
+    return 0;
+  }
+
   @override
   Widget build(BuildContext context) {
     if (isLoading) {
@@ -288,7 +362,9 @@ class _FullMatchDetailState extends State<FullMatchDetail>
       );
     }
 
-    if (error != null) {
+    // Prefer summary data; else fallback meta; else show error page
+    final raw = summaryData?.rawMatchData ?? _fallbackMatchData;
+    if (raw == null) {
       return SafeArea(
         child: Scaffold(
           appBar: AppBar(
@@ -296,81 +372,122 @@ class _FullMatchDetailState extends State<FullMatchDetail>
             title: const Text('Match Details', style: TextStyle(color: Colors.white)),
             iconTheme: const IconThemeData(color: Colors.white),
           ),
-          body: Center(child: Text(error!)),
+          body: Center(child: Text(error ?? 'Failed to load match detail.')),
         ),
       );
     }
 
-    final raw = summaryData!.rawMatchData;
-
-    // Prefer authed youtube if present; else public (normalized)
-    final String? youtubeUrlPublic = _normalizeYoutube(raw['youtube']);
-    final String? youtubeUrl = _youtubeUrl ?? youtubeUrlPublic;
-
-    final matchDateTime =
-    DateFormat('yyyy-MM-dd HH:mm:ss').parse('${raw['match_date']} ${raw['match_time']}');
     final now = DateTime.now();
-    final isUpcoming = matchDateTime.isAfter(now);
+    final matchDateTime = _safeParseMatchDateTime(raw);
+    final isUpcoming = (matchDateTime != null) ? matchDateTime.isAfter(now) : false;
     final bool isLive = _isLiveValue(raw['status']);
-    final ownerId = raw['user_id'] as int?;
-    final canEdit = (isUpcoming || isLive) && ownerId != null && ownerId == _currentUserId;
+    final team1Id = _toInt(raw['team_1']?['team_id']);
+    final team2Id = _toInt(raw['team_2']?['team_id']);
+    final team1Name = summaryData?.teamAName ?? (raw['team_1']?['team_name']?.toString() ?? 'Team A');
+    final team2Name = summaryData?.teamBName ?? (raw['team_2']?['team_name']?.toString() ?? 'Team B');
+    final isDark = Theme.of(context).brightness == Brightness.dark;
 
     // ✅ Prefer YouTube whenever it exists; otherwise show TV if we have a live score
+    final String? youtubeUrlPublic = _normalizeYoutube(raw['youtube']);
+    final String? youtubeUrl = _youtubeUrl ?? youtubeUrlPublic;
     final bool hasYoutube = _isYoutubeUrl(youtubeUrl);
     final _HeaderPanel headerPanel =
     hasYoutube ? _HeaderPanel.youtube : (_liveScore != null ? _HeaderPanel.tv : _HeaderPanel.none);
 
-    final team1Id = raw['team_1']['team_id'] as int;
-    final team2Id = raw['team_2']['team_id'] as int;
-    final team1Name = summaryData!.teamAName;
-    final team2Name = summaryData!.teamBName;
-    final isDark = Theme.of(context).brightness == Brightness.dark;
+    final bool showSummary = _showSummaryTab && summaryData != null;
+
+    // ---- Dynamic tabs & views (keep lists in perfect sync) ----
+    final List<Tab> tabs = [
+      if (showSummary) const Tab(text: 'Summary'),
+      const Tab(text: 'Scorecard'),
+      const Tab(text: 'Squad'),
+      const Tab(text: 'Stats'),
+      const Tab(text: 'Commentary'),
+      const Tab(text: 'Info')
+    ];
+
+    final List<Widget> views = [
+      if (showSummary)
+        MatchSummaryTab(
+          matchId: widget.matchId,
+          summary: summaryData!.rawSummary,
+          matchData: summaryData!.rawMatchData,
+        ),
+      ScorecardScreen(matchId: widget.matchId),
+      MatchSquadTab(matchId: widget.matchId),
+      MatchStatsTab(
+        matchId: widget.matchId,
+        team1Name: team1Name,
+        team2Name: team2Name,
+        refreshTick: _refreshTick,
+      ),
+      MatchCommentaryTab(
+        matchId: widget.matchId,
+        team1Id: team1Id,
+        team2Id: team2Id,
+        team1Name: team1Name,
+        team2Name: team2Name,
+      ),
+      MatchInfoTab(matchData: raw)
+    ];
+
+    // Clamp previously saved tab index to new length
+    if (_savedTabIndex >= tabs.length) _savedTabIndex = tabs.length - 1;
+    if (_savedTabIndex < 0) _savedTabIndex = 0;
+
+    // Scorecard index depends on whether Summary exists
+    final scorecardTabIndex = showSummary ? 1 : 0;
 
     return SafeArea(
-      child: Scaffold(
-        backgroundColor: isDark ? Colors.black : const Color(0xFFF4F6FA),
-        appBar: PreferredSize(
-          preferredSize: const Size.fromHeight(kToolbarHeight + kTextTabBarHeight + 20),
-          child: Container(
-            decoration: isDark
-                ? const BoxDecoration(
-              color: Color(0xFF1E1E1E),
-              borderRadius: BorderRadius.vertical(bottom: Radius.circular(20)),
-            )
-                : const BoxDecoration(
-              gradient: LinearGradient(
-                colors: [AppColors.primary, Color(0xFF42A5F5)],
-                begin: Alignment.topLeft,
-                end: Alignment.bottomRight,
+      child: DefaultTabController( // ✅ SINGLE controller for TabBar + TabBarView
+        length: tabs.length,
+        initialIndex: _savedTabIndex,
+        child: Scaffold(
+          backgroundColor: isDark ? Colors.black : const Color(0xFFF4F6FA),
+
+          // ---------- AppBar with TabBar inside ----------
+          appBar: PreferredSize(
+            preferredSize: const Size.fromHeight(kToolbarHeight + kTextTabBarHeight + 20),
+            child: Container(
+              decoration: isDark
+                  ? const BoxDecoration(
+                color: Color(0xFF1E1E1E),
+                borderRadius: BorderRadius.vertical(bottom: Radius.circular(20)),
+              )
+                  : const BoxDecoration(
+                gradient: LinearGradient(
+                  colors: [AppColors.primary, Color(0xFF42A5F5)],
+                  begin: Alignment.topLeft,
+                  end: Alignment.bottomRight,
+                ),
+                borderRadius: BorderRadius.vertical(bottom: Radius.circular(20)),
               ),
-              borderRadius: BorderRadius.vertical(bottom: Radius.circular(20)),
-            ),
-            child: SafeArea(
-              bottom: false,
-              child: Column(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  SizedBox(
-                    height: kToolbarHeight,
-                    child: Row(
-                      children: [
-                        const BackButton(color: Colors.white),
-                        const Expanded(
-                          child: Center(
-                            child: Text(
-                              'Match Details',
-                              style: TextStyle(
-                                color: Colors.white,
-                                fontWeight: FontWeight.w800,
-                                fontSize: 20,
+              child: SafeArea(
+                bottom: false,
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    SizedBox(
+                      height: kToolbarHeight,
+                      child: Row(
+                        children: [
+                          const BackButton(color: Colors.white),
+                          const Expanded(
+                            child: Center(
+                              child: Text(
+                                'Match Details',
+                                style: TextStyle(
+                                  color: Colors.white,
+                                  fontWeight: FontWeight.w800,
+                                  fontSize: 20,
+                                ),
                               ),
                             ),
                           ),
-                        ),
-                        SizedBox(
-                          width: kToolbarHeight,
-                          child: isLive
-                              ? const Center(
+                          SizedBox(
+                            width: kToolbarHeight,
+                            child: isLive
+                                ? const Center(
                               child: Text(
                                 'LIVE',
                                 style: TextStyle(
@@ -378,141 +495,156 @@ class _FullMatchDetailState extends State<FullMatchDetail>
                                   fontWeight: FontWeight.w900,
                                   letterSpacing: 1,
                                 ),
-                              ))
-                              : null,
-                        ),
-                      ],
-                    ),
-                  ),
-                  Padding(
-                    padding: const EdgeInsets.fromLTRB(12, 4, 12, 8),
-                    child: ClipRRect(
-                      borderRadius: BorderRadius.circular(14),
-                      clipBehavior: Clip.hardEdge,
-                      child: Container(
-                        decoration: BoxDecoration(
-                          color: Colors.white.withOpacity(0.14),
-                          borderRadius: BorderRadius.circular(14),
-                          border: Border.all(color: Colors.white.withOpacity(0.22)),
-                        ),
-                        child: TabBar(
-                          controller: _tabController,
-                          isScrollable: true,
-                          dividerColor: Colors.transparent,
-                          overlayColor: WidgetStateProperty.all(Colors.transparent),
-                          indicatorPadding: const EdgeInsets.symmetric(horizontal: 6, vertical: 6),
-                          indicator: const ShapeDecoration(
-                            color: Colors.white,
-                            shape: StadiumBorder(),
-                            shadows: [
-                              BoxShadow(color: Color(0x33000000), blurRadius: 8, offset: Offset(0, 3)),
-                            ],
+                              ),
+                            )
+                                : null,
                           ),
-                          indicatorSize: TabBarIndicatorSize.tab,
-                          labelPadding: const EdgeInsets.symmetric(horizontal: 14),
-                          labelColor: AppColors.primary,
-                          unselectedLabelColor: Colors.white,
-                          labelStyle: const TextStyle(fontSize: 15, fontWeight: FontWeight.w700),
-                          unselectedLabelStyle: const TextStyle(fontSize: 15, fontWeight: FontWeight.w600),
-                          tabs: _tabs,
-                        ),
+                        ],
                       ),
                     ),
-                  ),
-                ],
+
+                    // Tab bar (shares controller with TabBarView via DefaultTabController above)
+                    Padding(
+                      padding: const EdgeInsets.fromLTRB(12, 4, 12, 8),
+                      child: Builder(
+                        builder: (context) {
+                          final ctrl = DefaultTabController.of(context)!;
+                          // Persist selection on swipe/tap changes
+                          ctrl.addListener(() {
+                            if (!ctrl.indexIsChanging) {
+                              _savedTabIndex = ctrl.index;
+                            }
+                          });
+
+                          return ClipRRect(
+                            borderRadius: BorderRadius.circular(14),
+                            clipBehavior: Clip.hardEdge,
+                            child: Container(
+                              decoration: BoxDecoration(
+                                color: Colors.white.withOpacity(0.14),
+                                borderRadius: BorderRadius.circular(14),
+                                border: Border.all(color: Colors.white.withOpacity(0.22)),
+                              ),
+                              child: TabBar(
+                                isScrollable: true,
+                                dividerColor: Colors.transparent,
+                                overlayColor: WidgetStateProperty.all(Colors.transparent),
+                                indicatorPadding: const EdgeInsets.symmetric(horizontal: 6, vertical: 6),
+                                indicator: const ShapeDecoration(
+                                  color: Colors.white,
+                                  shape: StadiumBorder(),
+                                  shadows: [
+                                    BoxShadow(color: Color(0x33000000), blurRadius: 8, offset: Offset(0, 3)),
+                                  ],
+                                ),
+                                indicatorSize: TabBarIndicatorSize.tab,
+                                labelPadding: const EdgeInsets.symmetric(horizontal: 14),
+                                labelColor: AppColors.primary,
+                                unselectedLabelColor: Colors.white,
+                                labelStyle: const TextStyle(fontSize: 15, fontWeight: FontWeight.w700),
+                                unselectedLabelStyle:
+                                const TextStyle(fontSize: 15, fontWeight: FontWeight.w600),
+                                tabs: tabs,
+                                onTap: (i) => _savedTabIndex = i,
+                              ),
+                            ),
+                          );
+                        },
+                      ),
+                    ),
+                  ],
+                ),
               ),
             ),
           ),
-        ),
-        body: RefreshIndicator(
-          onRefresh: _refreshAll,
-          child: NestedScrollView(
-            headerSliverBuilder: (context, innerBoxIsScrolled) => [
-              SliverToBoxAdapter(
-                child: Padding(
-                  padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.stretch,
-                    children: [
-                      // ----- TV panel (graphics removed) -----
-                      if (headerPanel == _HeaderPanel.tv && _liveScore != null)
-                        Card(
-                          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-                          elevation: 1,
-                          child: Padding(
-                            padding: const EdgeInsets.all(12),
-                            child: TVStyleScoreScreen(
-                              teamName: _liveScore!['team_name'] ?? '',
-                              runs: int.tryParse(_liveScore!['score']['total_runs'].toString()) ?? 0,
-                              wickets: int.tryParse(_liveScore!['score']['total_wkts'].toString()) ?? 0,
-                              overs: _oversAsDouble(Map<String, dynamic>.from(_liveScore!['score'] as Map)),
-                              extras: int.tryParse(_liveScore!['score']['extra_runs'].toString()) ?? 0,
-                              matchId: widget.matchId,
-                              teamId: int.parse(_liveScore!['team_id'].toString()),
-                              isLive: isLive,
-                              refreshInterval: const Duration(seconds: 10),
-                            ),
-                          ),
-                        ),
 
-                      // ----- YouTube panel (graphics removed) -----
-                      if (headerPanel == _HeaderPanel.youtube && (youtubeUrl ?? '').isNotEmpty) ...[
-                        const SizedBox(height: 12),
-                        Card(
-                          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-                          elevation: 1,
-                          child: Padding(
-                            padding: const EdgeInsets.fromLTRB(12, 12, 12, 12),
-                            child: Column(
-                              crossAxisAlignment: CrossAxisAlignment.stretch,
-                              children: [
-                                const Padding(
-                                  padding: EdgeInsets.only(bottom: 8),
-                                  child: Text(
-                                    'Live Stream / Video',
-                                    textAlign: TextAlign.center,
-                                    style: TextStyle(fontSize: 16, fontWeight: FontWeight.w800),
-                                  ),
+          // ---------- Body with TabBarView ----------
+          body: RefreshIndicator(
+            onRefresh: _refreshAll,
+            child: NestedScrollView(
+              headerSliverBuilder: (context, _) => [
+                SliverToBoxAdapter(
+                  child: Padding(
+                    padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.stretch,
+                      children: [
+                        // ----- TV panel -----
+                        if (headerPanel == _HeaderPanel.tv && _liveScore != null)
+                          Card(
+                            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                            elevation: 1,
+                            child: Padding(
+                              padding: const EdgeInsets.all(12),
+                              child: TVStyleScoreScreen(
+                                teamName: _liveScore!['team_name'] ?? '',
+                                runs: int.tryParse(_liveScore!['score']['total_runs'].toString()) ?? 0,
+                                wickets: int.tryParse(_liveScore!['score']['total_wkts'].toString()) ?? 0,
+                                overs: _oversAsDouble(
+                                  Map<String, dynamic>.from(_liveScore!['score'] as Map),
                                 ),
-                                YouTubeBox(youtubeUrl: youtubeUrl!),
-                              ],
+                                extras: int.tryParse(_liveScore!['score']['extra_runs'].toString()) ?? 0,
+                                matchId: widget.matchId,
+                                teamId: int.parse(_liveScore!['team_id'].toString()),
+                                isLive: isLive,
+                                refreshInterval: const Duration(seconds: 10),
+                              ),
                             ),
                           ),
-                        ),
-                      ],
 
-                      const SizedBox(height: 12),
-                      _buildSponsorStripCard(), // centered title + original carousel
-                    ],
+                        // ----- YouTube panel -----
+                        if (headerPanel == _HeaderPanel.youtube && (youtubeUrl ?? '').isNotEmpty) ...[
+                          const SizedBox(height: 12),
+                          Card(
+                            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                            elevation: 1,
+                            child: Padding(
+                              padding: const EdgeInsets.fromLTRB(12, 12, 12, 12),
+                              child: Column(
+                                crossAxisAlignment: CrossAxisAlignment.stretch,
+                                children: [
+                                  const Padding(
+                                    padding: EdgeInsets.only(bottom: 8),
+                                    child: Text(
+                                      'Live Stream / Video',
+                                      textAlign: TextAlign.center,
+                                      style: TextStyle(fontSize: 16, fontWeight: FontWeight.w800),
+                                    ),
+                                  ),
+                                  YouTubeBox(youtubeUrl: youtubeUrl!),
+                                ],
+                              ),
+                            ),
+                          ),
+                        ],
+
+                        const SizedBox(height: 12),
+                        _buildSponsorStripCard(), // centered title + carousel
+                      ],
+                    ),
                   ),
                 ),
-              ),
-            ],
-            body: TabBarView(
-              controller: _tabController,
-              children: [
-                MatchSummaryTab(
-                  matchId: widget.matchId,
-                  summary: summaryData!.rawSummary,
-                  matchData: summaryData!.rawMatchData,
-                ),
-                ScorecardScreen(matchId: widget.matchId),
-                MatchSquadTab(matchId: widget.matchId),
-                MatchStatsTab(
-                  matchId: widget.matchId,
-                  team1Name: team1Name,
-                  team2Name: team2Name,
-                  refreshTick: _refreshTick,
-                ),
-                MatchInfoTab(matchData: summaryData!.rawMatchData),
-                MatchCommentaryTab(
-                  matchId: widget.matchId,
-                  team1Id: team1Id,
-                  team2Id: team2Id,
-                  team1Name: team1Name,
-                  team2Name: team2Name,
-                ),
               ],
+              // ⬇️ Allow outer swipe on all tabs EXCEPT Scorecard (so inner A/B swipe works there)
+              body: Builder(
+                builder: (context) {
+                  final ctrl = DefaultTabController.of(context)!;
+                  return AnimatedBuilder(
+                    animation: ctrl.animation!,
+                    builder: (_, __) {
+                      final onScorecard = ctrl.index == scorecardTabIndex;
+                      return TabBarView(
+                        physics: onScorecard
+                            ? const NeverScrollableScrollPhysics()
+                            : const BouncingScrollPhysics(
+                          parent: AlwaysScrollableScrollPhysics(),
+                        ),
+                        children: views,
+                      );
+                    },
+                  );
+                },
+              ),
             ),
           ),
         ),
@@ -543,8 +675,7 @@ class _FullMatchDetailState extends State<FullMatchDetail>
               crossAxisAlignment: CrossAxisAlignment.stretch,
               children: [
                 Center(
-                  child: Text('Sponsors',
-                      style: TextStyle(fontWeight: FontWeight.w800, fontSize: 14)),
+                  child: Text('Sponsors', style: TextStyle(fontWeight: FontWeight.w800, fontSize: 14)),
                 ),
                 SizedBox(height: 8),
               ],
@@ -557,41 +688,53 @@ class _FullMatchDetailState extends State<FullMatchDetail>
   }
 }
 
-// ====== Sponsor widgets (unchanged visuals for centered name) ======
-const String _kPlaceholderAsset = 'lib/asset/images/cricjust_logo.png';
-bool _looksHttp(String s) => s.startsWith('http://') || s.startsWith('https://');
-String _absoluteUrl(String url) {
+// ====== Safe image helpers (avoid empty/relative URLs crashing NetworkImage) ======
+const String kCjPlaceholder = 'lib/asset/images/cricjust_logo.png';
+
+bool _isHttpish(String s) => s.startsWith('http://') || s.startsWith('https://');
+
+String _absUrl(String url) {
   final u = url.trim();
-  if (_looksHttp(u)) return u;
+  if (_isHttpish(u)) return u;
+  if (u.isEmpty || u == 'null') return '';
   if (u.startsWith('/')) return 'https://cricjust.in$u';
   return 'https://cricjust.in/$u';
 }
-extension _StrBlank on String? {
-  bool get isBlank => this == null || this!.trim().isEmpty || this == 'null';
-}
-ImageProvider<Object> _safeImageProvider(String? url) {
-  if (url.isBlank) return const AssetImage(_kPlaceholderAsset);
-  return NetworkImage(_absoluteUrl(url!));
-}
-Widget _safeNetImg(
+
+/// Drop-in replacement for Image.network that NEVER throws on bad URLs.
+Widget cjImage(
     String? url, {
       double? width,
       double? height,
       BoxFit fit = BoxFit.cover,
+      BorderRadius? radius,
     }) {
-  if (url.isBlank) {
-    return Image.asset(_kPlaceholderAsset, width: width, height: height, fit: fit);
+  final holder = Image.asset(kCjPlaceholder, width: width, height: height, fit: fit);
+
+  final raw = (url ?? '').trim();
+  if (raw.isEmpty || raw == 'null') {
+    return radius == null ? holder : ClipRRect(borderRadius: radius, child: holder);
   }
-  return Image.network(
-    _absoluteUrl(url!),
+  final abs = _absUrl(raw);
+  if (abs.isEmpty || !_isHttpish(abs)) {
+    return radius == null ? holder : ClipRRect(borderRadius: radius, child: holder);
+  }
+
+  final net = Image.network(
+    abs,
     width: width,
     height: height,
     fit: fit,
-    errorBuilder: (_, __, ___) =>
-        Image.asset(_kPlaceholderAsset, width: width, height: height, fit: fit),
+    errorBuilder: (_, __, ___) => holder,
   );
+  return radius == null ? net : ClipRRect(borderRadius: radius, child: net);
 }
 
+// Backwards-compat for existing calls in this file
+Widget _safeNetImg(String? url, {double? width, double? height, BoxFit fit = BoxFit.cover}) =>
+    cjImage(url, width: width, height: height, fit: fit);
+
+// ====== Sponsor widgets (unchanged visuals for centered name) ======
 class _SponsorCarousel extends StatefulWidget {
   final List<Sponsor> sponsors;
   const _SponsorCarousel({required this.sponsors});

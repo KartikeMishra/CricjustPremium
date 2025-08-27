@@ -24,6 +24,7 @@ import '../theme/theme_provider.dart';
 import 'add_match_screen.dart';
 import 'add_sponsor_screen.dart';
 import 'create_user_screen.dart';
+import 'faq.dart';
 import 'get_matches.dart';
 import 'get_team_screen.dart';
 import 'get_tournament.dart';
@@ -588,6 +589,7 @@ class _HomeScreenState extends State<HomeScreen> {
     );
   }
 
+
   @override
   Widget build(BuildContext context) {
     final isDark = Theme.of(context).brightness == Brightness.dark;
@@ -758,7 +760,15 @@ class _HomeScreenState extends State<HomeScreen> {
                     },
                   ),
                   _buildDrawerItem(Icons.school, 'App Tutorial'),
-                  _buildDrawerItem(Icons.help_outline, 'Solve'),
+                  _buildDrawerItem(
+                    Icons.help_outline,
+                    'FAQ',
+                    onTap: () => HtmlBottomSheet.show(
+                      context,
+                      pageId: 3554,
+                      fallbackTitle: 'Cricjust — FAQ',
+                    ),
+                  ),
                   _buildDrawerItem(Icons.share, 'Share App', onTap: _showShareOptions),
                   _buildDrawerItem(Icons.people, 'Find People'),
 
