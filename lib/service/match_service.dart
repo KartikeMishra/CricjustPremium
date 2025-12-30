@@ -381,4 +381,108 @@ class MatchService {
     final body = await _getJson(uri: uri);
     return body['status'] == 1;
   }
+
+
+  // -------------------------
+// Update Match
+// -------------------------
+
+  static Future<Map<String, dynamic>> updateMatch({
+    required String apiToken,
+    required int matchId,
+    required Map<String, String> formData,
+  }) async {
+    final uri = Uri.parse('$_baseUrl/update-cricket-match').replace(
+      queryParameters: {
+        'api_logged_in_token': apiToken,
+        'match_id': matchId.toString(),
+      },
+    );
+
+    try {
+      final res = await http.post(uri, body: formData).timeout(const Duration(seconds: 25));
+
+      if (res.statusCode != 200) {
+        throw Exception('HTTP ${res.statusCode}: ${res.reasonPhrase}');
+      }
+
+      final body = json.decode(res.body);
+      if (body is! Map<String, dynamic>) {
+        throw Exception('Invalid response format');
+      }
+
+      if (body['status'] != 1) {
+        final msg = (body['message'] ??
+            (body['error']?.toString() ?? 'Failed to update match'))
+            .toString();
+        if (_looksLikeSessionExpired(msg)) {
+          final prefs = await SharedPreferences.getInstance();
+          await prefs.clear();
+          throw Exception('Session expired. Please login again.');
+        }
+        throw Exception(msg);
+      }
+
+      return body;
+    } on TimeoutException {
+      throw Exception('Server timeout, please try again.');
+    } on SocketException {
+      throw Exception('Network error. Please check your connection.');
+    } catch (e) {
+      throw Exception('Failed to update match: $e');
+    }
+  }
+// -------------------------
+// Update Group
+// -------------------------
+  static Future<Map<String, dynamic>> updateGroup({
+    required String token,
+    required int tournamentId,
+    required int groupId,
+    required String groupName,
+  }) async {
+    final uri = Uri.parse(
+      'https://cricjust.in/wp-json/custom-api-for-cricket/update-group'
+          '?api_logged_in_token=$token',
+    );
+
+    final body = {
+      'tournament_id': tournamentId.toString(),
+      'group_id': groupId.toString(),
+      'group_name': groupName,
+    };
+
+    try {
+      final response = await http
+          .post(uri, body: body)
+          .timeout(const Duration(seconds: 20));
+
+      if (response.statusCode != 200) {
+        throw Exception('HTTP ${response.statusCode}');
+      }
+
+      final jsonBody = json.decode(response.body);
+      if (jsonBody['status'] == 1) {
+        return {
+          'success': true,
+          'message': jsonBody['message'] ?? 'Group updated successfully',
+          'data': jsonBody['data'] ?? [],
+        };
+      } else {
+        return {
+          'success': false,
+          'message': jsonBody['message'] ??
+              (jsonBody['error']?.toString() ?? 'Failed to update group'),
+        };
+      }
+    } on TimeoutException {
+      return {'success': false, 'message': 'Server timeout. Please try again.'};
+    } on SocketException {
+      return {'success': false, 'message': 'Network error. Please check your connection.'};
+    } catch (e) {
+      return {'success': false, 'message': 'Failed to update group: $e'};
+    }
+  }
+
+
 }

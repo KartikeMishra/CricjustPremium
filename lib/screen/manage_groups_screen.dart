@@ -1,5 +1,9 @@
+import 'dart:async';
+import 'dart:convert';
+import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:another_flushbar/flushbar.dart';
+import 'package:http/http.dart' as http;
 import 'package:shared_preferences/shared_preferences.dart';
 import '../theme/color.dart';
 import '../service/tournament_service.dart';
@@ -48,7 +52,7 @@ class _ManageGroupsScreenState extends State<ManageGroupsScreen> {
     if (res['success']) {
       final group = res['data'][0];
       setState(
-        () => _groups.add({
+            () => _groups.add({
           'group_id': int.tryParse(group['group_id'].toString()) ?? 0,
           'group_name': group['group_name'] ?? '',
           'tournament_id': widget.tournamentId,
@@ -60,6 +64,7 @@ class _ManageGroupsScreenState extends State<ManageGroupsScreen> {
     }
   }
 
+  // ✅ Corrected Update Group method
   Future<void> _updateGroup(int id, String newName) async {
     final res = await TournamentService.updateGroup(
       token: _token!,
@@ -139,9 +144,9 @@ class _ManageGroupsScreenState extends State<ManageGroupsScreen> {
               if (name.isEmpty) return;
 
               final exists = _groups.any(
-                (g) =>
-                    g['group_name'].toString().toLowerCase() ==
-                        name.toLowerCase() &&
+                    (g) =>
+                g['group_name'].toString().toLowerCase() ==
+                    name.toLowerCase() &&
                     (!isEdit || g['group_id'] != id),
               );
 
@@ -153,7 +158,7 @@ class _ManageGroupsScreenState extends State<ManageGroupsScreen> {
               }
 
               Navigator.pop(context);
-              isEdit ? await _updateGroup(id, name) : await _addGroup(name);
+              isEdit ? await _updateGroup(id!, name) : await _addGroup(name);
             },
             child: Text(isEdit ? "Update" : "Add"),
           ),
@@ -219,10 +224,10 @@ class _ManageGroupsScreenState extends State<ManageGroupsScreen> {
             gradient: Theme.of(context).brightness == Brightness.dark
                 ? null
                 : const LinearGradient(
-                    colors: [AppColors.primary, Color(0xFF42A5F5)],
-                    begin: Alignment.topLeft,
-                    end: Alignment.bottomRight,
-                  ),
+              colors: [AppColors.primary, Color(0xFF42A5F5)],
+              begin: Alignment.topLeft,
+              end: Alignment.bottomRight,
+            ),
             color: Theme.of(context).brightness == Brightness.dark
                 ? const Color(0xFF1E1E1E)
                 : null,
@@ -232,26 +237,26 @@ class _ManageGroupsScreenState extends State<ManageGroupsScreen> {
       body: _loading
           ? const Center(child: CircularProgressIndicator())
           : Padding(
-              padding: const EdgeInsets.all(16),
-              child: _groups.isEmpty
-                  ? const Center(child: Text("No groups yet."))
-                  : Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Text(
-                          "Total Groups: ${_groups.length}",
-                          style: const TextStyle(fontWeight: FontWeight.bold),
-                        ),
-                        const SizedBox(height: 10),
-                        Expanded(
-                          child: ListView.builder(
-                            itemCount: _groups.length,
-                            itemBuilder: (_, i) => _groupCard(_groups[i]),
-                          ),
-                        ),
-                      ],
-                    ),
+        padding: const EdgeInsets.all(16),
+        child: _groups.isEmpty
+            ? const Center(child: Text("No groups yet."))
+            : Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(
+              "Total Groups: ${_groups.length}",
+              style: const TextStyle(fontWeight: FontWeight.bold),
             ),
+            const SizedBox(height: 10),
+            Expanded(
+              child: ListView.builder(
+                itemCount: _groups.length,
+                itemBuilder: (_, i) => _groupCard(_groups[i]),
+              ),
+            ),
+          ],
+        ),
+      ),
       floatingActionButton: FloatingActionButton.extended(
         backgroundColor: AppColors.primary,
         icon: const Icon(Icons.group_add),

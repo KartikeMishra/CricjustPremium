@@ -321,6 +321,7 @@ class _SignupScreenState extends State<SignupScreen> {
       final data = json.decode(respStr) as Map<String, dynamic>;
 
       if (response.statusCode == 200 && data['status'] == 1) {
+        // ✅ Signup success
         final token = data['api_logged_in_token'] as String?;
         final userData = data['data'] as Map<String, dynamic>;
         final extra = data['extra_data'] as Map<String, dynamic>? ?? {};
@@ -354,7 +355,19 @@ class _SignupScreenState extends State<SignupScreen> {
               (route) => false,
         );
       } else {
-        setState(() => _errorMessage = data['message'] ?? 'Signup failed');
+        // 🟥 Handle “already registered” cases
+        final msg = (data['message'] ?? '').toString().toLowerCase();
+
+        if (msg.contains('already') || msg.contains('exist')) {
+          // Email or phone already in use
+          setState(() {
+            _errorMessage = 'You are already registered. Please login instead.';
+          });
+        } else {
+          setState(() {
+            _errorMessage = data['message'] ?? 'Signup failed';
+          });
+        }
       }
     } catch (e) {
       setState(() => _errorMessage = 'Could not signup. Please try again.');

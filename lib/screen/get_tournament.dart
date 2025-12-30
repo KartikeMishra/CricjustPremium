@@ -1,5 +1,3 @@
-// lib/screen/get_tournament.dart  (or tournament_list_screen.dart — keep your path)
-
 import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:shared_preferences/shared_preferences.dart';
@@ -22,28 +20,21 @@ class TournamentListScreen extends StatefulWidget {
 }
 
 class _TournamentListScreenState extends State<TournamentListScreen> {
-  // ───────── Session / permissions ─────────
   String? _apiToken;
-  int? _currentPlayerId; // use player id consistently
+  int? _currentPlayerId;
   bool _isAdmin = false;
 
-  // ───────── Data ─────────
   final List<TournamentModel> _tournaments = [];
-
-  // Cache: teamId -> teamName (for showing winner)
   final Map<int, String> _teamNameCache = {};
-  final Set<int> _pendingWinnerFetches = {}; // prevent duplicate fetches
+  final Set<int> _pendingWinnerFetches = {};
 
-  // ───────── UI / search ─────────
   bool _isLoading = true;
   String _search = '';
   Timer? _debounce;
 
-  // ───────── Controllers ─────────
   final ScrollController _scrollController = ScrollController();
   final TextEditingController _searchController = TextEditingController();
 
-  // ───────── Lifecycle ─────────
   @override
   void initState() {
     super.initState();
@@ -60,14 +51,12 @@ class _TournamentListScreenState extends State<TournamentListScreen> {
   }
 
   Future<void> _init() async {
-    // Optional: normalize legacy role keys so future reads are stable
-    await migrateRoleKeys();
+    await _migrateRoleKeys();
 
     if (!await _ensureSession()) return;
     await _fetchTournaments();
   }
 
-  /// Ensure we have a valid token + player id; redirect to login if not.
   Future<bool> _ensureSession() async {
     _apiToken = await SessionManager.getToken();
     _currentPlayerId = await SessionManager.getPlayerId();
@@ -81,15 +70,13 @@ class _TournamentListScreenState extends State<TournamentListScreen> {
       return false;
     }
 
-    _isAdmin = await resolveIsAdminSafe();
+    _isAdmin = await _resolveIsAdminSafe();
     return true;
   }
 
-  // ───────── Admin & roles (type-safe) ─────────
-  Future<bool> resolveIsAdminSafe() async {
+  Future<bool> _resolveIsAdminSafe() async {
     final prefs = await SharedPreferences.getInstance();
 
-    // roles may be List, String(csv), or something else
     final dynamic rolesAny = prefs.get('roles');
     if (rolesAny is List) {
       final roles = rolesAny.map((e) => e.toString().toLowerCase()).toList();
@@ -99,18 +86,11 @@ class _TournamentListScreenState extends State<TournamentListScreen> {
       if (csv.contains('administrator') || csv.contains('admin')) return true;
     }
 
-    // legacy key: could be non-string (e.g., bool); never use getString
-    final dynamic legacyAny = prefs.get('roles_csv');
-    if (legacyAny != null && legacyAny.toString().toLowerCase().contains('admin')) {
-      return true;
-    }
-
     for (final key in ['role', 'user_role', 'userType', 'user_type']) {
       final v = prefs.get(key);
       if (v != null && v.toString().toLowerCase().contains('admin')) return true;
     }
 
-    // Flexible is_admin (bool/int/string)
     final rawIsAdmin = prefs.get('is_admin');
     if (rawIsAdmin is bool) return rawIsAdmin;
     if (rawIsAdmin is int) return rawIsAdmin == 1;
@@ -119,7 +99,6 @@ class _TournamentListScreenState extends State<TournamentListScreen> {
       if (['1', 'true', 'yes', 'admin', 'administrator'].contains(s)) return true;
     }
 
-    // (Optional) hardcoded fallbacks
     const hardcodedAdmins = <int>{12};
     if (_currentPlayerId != null && hardcodedAdmins.contains(_currentPlayerId)) {
       return true;
@@ -128,30 +107,28 @@ class _TournamentListScreenState extends State<TournamentListScreen> {
     return false;
   }
 
-  Future<void> migrateRoleKeys() async {
+  Future<void> _migrateRoleKeys() async {
     final prefs = await SharedPreferences.getInstance();
-
     final r = prefs.get('roles');
     if (r is String) {
       final parts = r.split(',').map((e) => e.trim()).where((e) => e.isNotEmpty).toList();
       await prefs.setStringList('roles', parts);
     }
-
-    final rc = prefs.get('roles_csv');
-    if (rc != null && rc is! String) {
-      // if it was saved as a bool/int/etc., remove it to avoid future type issues
-      await prefs.remove('roles_csv');
-    }
   }
 
-  // ───────── Data fetch ─────────
+  // --------------------------------------------------------------------------
+  // Fetch tournaments for this logged-in user
+  // --------------------------------------------------------------------------
   Future<void> _fetchTournaments() async {
     if (!await _ensureSession()) return;
     setState(() => _isLoading = true);
 
     try {
-      // If your API supports server-side search, pass _search in the request.
-      final data = await TournamentService.fetchAllTournamentsRaw(apiToken: _apiToken!);
+      final data = await TournamentService.fetchUserTournaments(
+        apiToken: _apiToken!,
+        limit: 50,
+        skip: 0,
+      );
 
       final q = _search.toLowerCase();
       final filtered = q.isEmpty
@@ -171,19 +148,14 @@ class _TournamentListScreenState extends State<TournamentListScreen> {
       await _populateWinnerNames(filtered);
     } catch (e) {
       final lower = e.toString().toLowerCase();
-      if (lower.contains('401') ||
-          lower.contains('unauthorized') ||
-          lower.contains('invalid api logged in token') ||
-          lower.contains('session expired')) {
+      if (lower.contains('unauthorized') || lower.contains('session expired')) {
         await SessionManager.clear();
         if (!mounted) return;
         Navigator.pushReplacement(
           context,
           MaterialPageRoute(builder: (_) => const LoginScreen()),
         );
-        return;
-      }
-      if (mounted) {
+      } else {
         ScaffoldMessenger.of(context)
             .showSnackBar(SnackBar(content: Text('Error: $e')));
       }
@@ -192,7 +164,9 @@ class _TournamentListScreenState extends State<TournamentListScreen> {
     }
   }
 
-  // Preload winner team names for completed tournaments.
+  // --------------------------------------------------------------------------
+  // Populate winner team names
+  // --------------------------------------------------------------------------
   Future<void> _populateWinnerNames(Iterable<TournamentModel> list) async {
     if (_apiToken == null || _apiToken!.isEmpty) return;
 
@@ -214,15 +188,12 @@ class _TournamentListScreenState extends State<TournamentListScreen> {
         if (name != null && name.trim().isNotEmpty) {
           _teamNameCache[id] = name.trim();
         }
-      } catch (_) {
-        // ignore individual failures
-      }
+      } catch (_) {}
     }));
 
-    if (mounted) setState(() {}); // refresh visible cards
+    if (mounted) setState(() {});
   }
 
-  // ───────── Search ─────────
   void _onSearchChanged() {
     if (_debounce?.isActive ?? false) _debounce!.cancel();
     _debounce = Timer(const Duration(milliseconds: 500), () async {
@@ -231,7 +202,9 @@ class _TournamentListScreenState extends State<TournamentListScreen> {
     });
   }
 
-  // ───────── Delete ─────────
+  // --------------------------------------------------------------------------
+  // Delete tournament
+  // --------------------------------------------------------------------------
   Future<void> _confirmDelete(int tournamentId) async {
     if (!await _ensureSession()) return;
 
@@ -250,9 +223,9 @@ class _TournamentListScreenState extends State<TournamentListScreen> {
         ],
       ),
     );
+
     if (confirm != true) return;
 
-    // Simple blocking loader
     showDialog(
       context: context,
       barrierDismissible: false,
@@ -260,51 +233,46 @@ class _TournamentListScreenState extends State<TournamentListScreen> {
     );
 
     try {
-      await TournamentService.deleteTournament(tournamentId, _apiToken!);
-      if (!mounted) return;
-      Navigator.pop(context); // close loader
+      await TournamentService.deleteTournament(
+        apiToken: _apiToken!, // ✅ Named parameter
+        tournamentId: tournamentId, // ✅ Named parameter
+      );
 
+      if (!mounted) return;
+      Navigator.pop(context);
       setState(() => _tournaments.removeWhere((t) => t.tournamentId == tournamentId));
+
       ScaffoldMessenger.of(context)
           .showSnackBar(const SnackBar(content: Text('Deleted successfully')));
     } catch (e) {
       if (!mounted) return;
-      Navigator.pop(context); // close loader
-      final lower = e.toString().toLowerCase();
-      if (lower.contains('unauthorized') || lower.contains('session expired')) {
-        await SessionManager.clear();
-        Navigator.pushReplacement(context, MaterialPageRoute(builder: (_) => const LoginScreen()));
-        return;
-      }
+      Navigator.pop(context);
       ScaffoldMessenger.of(context)
           .showSnackBar(SnackBar(content: Text('Delete failed: $e')));
     }
   }
 
-  // ───────── UI ─────────
+
+  // --------------------------------------------------------------------------
+  // UI builders
+  // --------------------------------------------------------------------------
   Widget _buildTournamentCard(TournamentModel t, bool isDark) {
     final isCompleted = t.winner != null && t.winner != 0;
 
-    // Permissions: admin or creator (and not completed) can edit/delete
     final isCreator = _currentPlayerId != null && _currentPlayerId == t.userId;
-    final canEdit   = _isAdmin || (!isCompleted && isCreator);
+    final canEdit = _isAdmin || (!isCompleted && isCreator);
     final canDelete = _isAdmin || (!isCompleted && isCreator);
 
     final textColor = isDark ? Colors.white : Colors.black;
-    final cardColor = isDark ? Colors.grey[900]! : Colors.white;
     final subTextColor = isDark ? Colors.grey[300]! : Colors.black87;
+    final cardColor = isDark ? Colors.grey[900]! : Colors.white;
 
-    // Winner label (uses cache; lazy-fetch if needed)
     String? winnerLabel() {
       final wid = t.winner;
       if (wid == null || wid == 0) return null;
-
       final cached = _teamNameCache[wid];
-      if (cached != null && cached.trim().isNotEmpty) return cached.trim();
-
-      if (_apiToken != null &&
-          _apiToken!.isNotEmpty &&
-          !_pendingWinnerFetches.contains(wid)) {
+      if (cached != null) return cached;
+      if (!_pendingWinnerFetches.contains(wid)) {
         _pendingWinnerFetches.add(wid);
         WidgetsBinding.instance.addPostFrameCallback((_) async {
           try {
@@ -316,14 +284,12 @@ class _TournamentListScreenState extends State<TournamentListScreen> {
               _teamNameCache[wid] = name.trim();
               if (mounted) setState(() {});
             }
-          } catch (_) {
-            // ignore
           } finally {
             _pendingWinnerFetches.remove(wid);
           }
         });
       }
-      return null; // show "—" until fetched
+      return null;
     }
 
     return Container(
@@ -357,21 +323,17 @@ class _TournamentListScreenState extends State<TournamentListScreen> {
                     ? const Icon(Icons.emoji_events, size: 26, color: AppColors.primary)
                     : null,
               ),
-              title: Text(
-                t.tournamentName,
-                style: TextStyle(fontWeight: FontWeight.bold, color: textColor),
-              ),
+              title: Text(t.tournamentName,
+                  style: TextStyle(fontWeight: FontWeight.bold, color: textColor)),
               subtitle: Padding(
                 padding: const EdgeInsets.only(top: 4),
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    Text(
-                      t.tournamentDesc,
-                      maxLines: 2,
-                      overflow: TextOverflow.ellipsis,
-                      style: TextStyle(color: subTextColor),
-                    ),
+                    Text(t.tournamentDesc,
+                        maxLines: 2,
+                        overflow: TextOverflow.ellipsis,
+                        style: TextStyle(color: subTextColor)),
                     if (isCompleted)
                       Padding(
                         padding: const EdgeInsets.only(top: 6),
@@ -380,13 +342,9 @@ class _TournamentListScreenState extends State<TournamentListScreen> {
                           spacing: 6,
                           children: [
                             const Icon(Icons.emoji_events, size: 18, color: Colors.amber),
-                            Text(
-                              'Winner: ${winnerLabel() ?? '—'}',
-                              style: const TextStyle(
-                                color: Colors.green,
-                                fontWeight: FontWeight.w600,
-                              ),
-                            ),
+                            Text('Winner: ${winnerLabel() ?? '—'}',
+                                style: const TextStyle(
+                                    color: Colors.green, fontWeight: FontWeight.w600)),
                           ],
                         ),
                       ),
@@ -419,8 +377,6 @@ class _TournamentListScreenState extends State<TournamentListScreen> {
               )
                   : null,
             ),
-
-            // Ongoing tournament actions
             if (!isCompleted)
               Align(
                 alignment: Alignment.centerRight,
@@ -434,11 +390,13 @@ class _TournamentListScreenState extends State<TournamentListScreen> {
                           Navigator.push(
                             context,
                             MaterialPageRoute(
-                              builder: (_) => ManageGroupsScreen(tournamentId: t.tournamentId),
+                              builder: (_) =>
+                                  ManageGroupsScreen(tournamentId: t.tournamentId),
                             ),
                           );
                         },
-                        icon: const Icon(Icons.groups, size: 20, color: AppColors.primary),
+                        icon:
+                        const Icon(Icons.groups, size: 20, color: AppColors.primary),
                         label: const Text('Manage Groups',
                             style: TextStyle(color: AppColors.primary)),
                       ),
@@ -447,11 +405,13 @@ class _TournamentListScreenState extends State<TournamentListScreen> {
                         Navigator.push(
                           context,
                           MaterialPageRoute(
-                            builder: (_) => ManageTournamentTeamsScreen(tournamentId: t.tournamentId),
+                            builder: (_) => ManageTournamentTeamsScreen(
+                                tournamentId: t.tournamentId),
                           ),
                         );
                       },
-                      icon: const Icon(Icons.groups_2, size: 20, color: AppColors.primary),
+                      icon: const Icon(Icons.groups_2,
+                          size: 20, color: AppColors.primary),
                       label: const Text('Manage Teams',
                           style: TextStyle(color: AppColors.primary)),
                     ),
@@ -464,7 +424,9 @@ class _TournamentListScreenState extends State<TournamentListScreen> {
     );
   }
 
-  // ───────── Build ─────────
+  // --------------------------------------------------------------------------
+  // Build
+  // --------------------------------------------------------------------------
   @override
   Widget build(BuildContext context) {
     final isDark = Theme.of(context).brightness == Brightness.dark;
@@ -472,66 +434,18 @@ class _TournamentListScreenState extends State<TournamentListScreen> {
 
     return Scaffold(
       backgroundColor: bgColor,
-      appBar: PreferredSize(
-        preferredSize: const Size.fromHeight(124),
-        child: AppBar(
-          backgroundColor: Colors.transparent,
-          elevation: 0,
-          toolbarHeight: 56,
-          iconTheme: const IconThemeData(color: Colors.white),
-          flexibleSpace: Container(
-            decoration: BoxDecoration(
-              gradient: isDark
-                  ? null
-                  : const LinearGradient(
-                colors: [AppColors.primary, Color(0xFF42A5F5)],
-                begin: Alignment.topLeft,
-                end: Alignment.bottomRight,
-              ),
-              color: isDark ? const Color(0xFF1E1E1E) : null,
-              borderRadius:
-              const BorderRadius.vertical(bottom: Radius.circular(20)),
-            ),
+      appBar: AppBar(
+        title: const Text('Manage Tournaments',
+            style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
+        backgroundColor:
+        isDark ? const Color(0xFF1E1E1E) : AppColors.primary,
+        centerTitle: true,
+        actions: [
+          IconButton(
+            icon: const Icon(Icons.refresh, color: Colors.white),
+            onPressed: _fetchTournaments,
           ),
-          title: const Text(
-            'Manage Tournaments',
-            style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold),
-          ),
-          bottom: PreferredSize(
-            preferredSize: const Size.fromHeight(68),
-            child: Padding(
-              padding: const EdgeInsets.fromLTRB(16, 0, 16, 12),
-              child: Container(
-                decoration: BoxDecoration(
-                  color: isDark ? Colors.grey[850] : Colors.white,
-                  borderRadius: BorderRadius.circular(30),
-                  boxShadow: [
-                    BoxShadow(
-                      color: isDark ? Colors.black26 : Colors.black12,
-                      blurRadius: 6,
-                      offset: const Offset(0, 3),
-                    ),
-                  ],
-                ),
-                child: TextField(
-                  controller: _searchController,
-                  style:
-                  TextStyle(color: isDark ? Colors.white : Colors.black87),
-                  decoration: InputDecoration(
-                    hintText: 'Search tournaments...',
-                    hintStyle: TextStyle(
-                        color: isDark ? Colors.white54 : Colors.grey),
-                    border: InputBorder.none,
-                    prefixIcon:
-                    const Icon(Icons.search, color: AppColors.primary),
-                    contentPadding: const EdgeInsets.symmetric(
-                        horizontal: 20, vertical: 14),
-                  ),
-                ),
-              ),
-            ),
-          ),
-        ),
+        ],
       ),
       body: _isLoading
           ? const Center(child: CircularProgressIndicator())
@@ -541,9 +455,9 @@ class _TournamentListScreenState extends State<TournamentListScreen> {
             ? ListView(
           physics: const AlwaysScrollableScrollPhysics(),
           children: const [
-            SizedBox(height: 180),
+            SizedBox(height: 200),
             Center(child: Text('No tournaments found.')),
-            SizedBox(height: 400),
+            SizedBox(height: 300),
           ],
         )
             : ListView.builder(

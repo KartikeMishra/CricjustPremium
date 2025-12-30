@@ -1,5 +1,3 @@
-// lib/widget/home_page_content.dart
-
 import 'package:cricjust_premium/screen/video_gallery_screen.dart';
 import 'package:flutter/material.dart';
 import 'package:shimmer/shimmer.dart';
@@ -12,14 +10,13 @@ import '../widget/tournament_section.dart';
 import '../widget/upcoming_matches_section.dart';
 import '../widget/recent_matches_section.dart';
 import '../widget/posts_section.dart';
-import '../theme/color.dart'; // for AppColors.primary
+import '../theme/color.dart'; // AppColors.primary
 import '../service/youtube_video_service.dart';
 import '../model/youtube_video_model.dart';
 import '../widget/video_card.dart';
 
 class HomePageContent extends StatefulWidget {
-  final VoidCallback onLoadMoreTap;
-
+  final VoidCallback onLoadMoreTap; // non-nullable by design
   const HomePageContent({super.key, required this.onLoadMoreTap});
 
   @override
@@ -30,22 +27,20 @@ class _HomePageContentState extends State<HomePageContent>
     with SingleTickerProviderStateMixin {
   bool _refreshing = false;
   bool _loading = false;
-  late AnimationController _animationController;
+  late final AnimationController _animationController;
 
   bool _hasLive = true;
   bool _hasTournament = true;
   bool _hasUpcoming = true;
   bool _hasRecent = true;
   bool _hasPosts = true;
-
-  // ⬇️ NEW: videos visibility flag
-  bool _hasVideos = true;
+  bool _hasVideos = true; // videos visibility flag
 
   @override
   void initState() {
     super.initState();
     _animationController = AnimationController(
-      duration: const Duration(milliseconds: 800),
+      duration: const Duration(milliseconds: 700),
       vsync: this,
     )..forward();
   }
@@ -68,7 +63,6 @@ class _HomePageContentState extends State<HomePageContent>
         case 'posts':
           _hasPosts = hasData;
           break;
-      // ⬇️ NEW
         case 'videos':
           _hasVideos = hasData;
           break;
@@ -82,30 +76,28 @@ class _HomePageContentState extends State<HomePageContent>
       _loading = true;
       _hasLive = _hasTournament = _hasUpcoming = _hasRecent = _hasPosts = _hasVideos = true;
     });
-    await Future.delayed(const Duration(seconds: 1));
+    await Future.delayed(const Duration(milliseconds: 900));
+    if (!mounted) return;
     setState(() {
       _refreshing = false;
       _loading = false;
     });
   }
 
-  Widget _buildShimmer() {
-    final base = Theme.of(context).brightness == Brightness.dark
-        ? Colors.grey[800]!
-        : Colors.grey[300]!;
-    final highlight = Theme.of(context).brightness == Brightness.dark
-        ? Colors.grey[700]!
-        : Colors.grey[100]!;
+  Widget _skeletonCard({double height = 130}) {
+    final dark = Theme.of(context).brightness == Brightness.dark;
+    final base = dark ? const Color(0xFF232323) : const Color(0xFFECEFF4);
+    final highlight = dark ? const Color(0xFF2C2C2C) : const Color(0xFFF5F7FA);
 
     return Shimmer.fromColors(
       baseColor: base,
       highlightColor: highlight,
       child: Container(
-        height: 130,
+        height: height,
         width: double.infinity,
         decoration: BoxDecoration(
           color: base,
-          borderRadius: BorderRadius.circular(14),
+          borderRadius: BorderRadius.circular(16),
         ),
       ),
     );
@@ -116,77 +108,16 @@ class _HomePageContentState extends State<HomePageContent>
       IconData icon,
       Widget content, {
         VoidCallback? onSeeAll,
+        Color? accent,
       }) {
-    final isDark = Theme.of(context).brightness == Brightness.dark;
-
-    final iconColor = title.contains('Live')
-        ? (isDark ? Colors.redAccent : Colors.red)
-        : AppColors.primary;
-
-    final seeAllColor = isDark ? Colors.lightBlueAccent : AppColors.primary;
-
     return FadeTransition(
       opacity: _animationController.drive(CurveTween(curve: Curves.easeIn)),
-      child: Container(
-        margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-        decoration: BoxDecoration(
-          color: isDark ? const Color(0xFF1E1E1E) : Colors.white,
-          borderRadius: BorderRadius.circular(18),
-          boxShadow: isDark
-              ? []
-              : [
-            BoxShadow(
-              color: Colors.black.withValues(alpha: 0.06),
-              blurRadius: 12,
-              offset: const Offset(0, 6),
-            ),
-          ],
-        ),
-        child: Padding(
-          padding: const EdgeInsets.symmetric(vertical: 16, horizontal: 16),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              // header row
-              Row(
-                mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                children: [
-                  Row(
-                    children: [
-                      Icon(icon, size: 20, color: iconColor),
-                      const SizedBox(width: 8),
-                      Text(
-                        title,
-                        style: TextStyle(
-                          fontSize: 17,
-                          fontWeight: FontWeight.w600,
-                          color: isDark ? Colors.white : Colors.black,
-                        ),
-                      ),
-                    ],
-                  ),
-                  if (onSeeAll != null)
-                    InkWell(
-                      onTap: onSeeAll,
-                      child: Padding(
-                        padding: const EdgeInsets.all(6.0),
-                        child: Text(
-                          'See All',
-                          style: TextStyle(
-                            fontSize: 13.5,
-                            color: seeAllColor,
-                            fontWeight: FontWeight.w500,
-                          ),
-                        ),
-                      ),
-                    ),
-                ],
-              ),
-              const SizedBox(height: 12),
-              _loading ? _buildShimmer() : content,
-            ],
-          ),
-        ),
+      child: SectionCard(
+        title: title,
+        icon: icon,
+        onSeeAll: onSeeAll,
+        accent: accent,
+        child: _loading ? _skeletonCard(height: 140) : content,
       ),
     );
   }
@@ -212,7 +143,9 @@ class _HomePageContentState extends State<HomePageContent>
               ),
             );
           },
+          accent: Colors.redAccent,
         ),
+
       if (_hasTournament)
         _buildSection(
           'Tournaments',
@@ -224,13 +157,11 @@ class _HomePageContentState extends State<HomePageContent>
               Navigator.push(
                 context,
                 MaterialPageRoute(
-                  builder: (_) =>
-                      TournamentDetailScreen(tournamentId: tournamentId),
+                  builder: (_) => TournamentDetailScreen(tournamentId: tournamentId),
                 ),
               );
             },
-            onDataLoaded: (hasData) =>
-                _onSectionDataLoaded('tournament', hasData),
+            onDataLoaded: (hasData) => _onSectionDataLoaded('tournament', hasData),
           ),
           onSeeAll: () {
             Navigator.push(
@@ -242,7 +173,7 @@ class _HomePageContentState extends State<HomePageContent>
           },
         ),
 
-      // ⬇️ NEW: Videos section (exactly 5 items)
+      // Videos (exactly ~5 items)
       if (_hasVideos)
         _buildSection(
           'Videos',
@@ -261,10 +192,9 @@ class _HomePageContentState extends State<HomePageContent>
       if (_hasUpcoming)
         _buildSection(
           'Upcoming Matches',
-          Icons.schedule,
+          Icons.schedule_rounded,
           UpcomingMatchesSection(
-            onDataLoaded: (hasData) =>
-                _onSectionDataLoaded('upcoming', hasData),
+            onDataLoaded: (hasData) => _onSectionDataLoaded('upcoming', hasData),
           ),
           onSeeAll: () {
             Navigator.push(
@@ -278,10 +208,11 @@ class _HomePageContentState extends State<HomePageContent>
             );
           },
         ),
+
       if (_hasRecent)
         _buildSection(
           'Recent Matches',
-          Icons.history,
+          Icons.history_rounded,
           RecentMatchesSection(
             onDataLoaded: (hasData) => _onSectionDataLoaded('recent', hasData),
           ),
@@ -297,10 +228,11 @@ class _HomePageContentState extends State<HomePageContent>
             );
           },
         ),
+
       if (_hasPosts)
         _buildSection(
           'News & Posts',
-          Icons.article,
+          Icons.article_rounded,
           PostsSection(
             onLoadMore: widget.onLoadMoreTap,
             onDataLoaded: (hasData) => _onSectionDataLoaded('posts', hasData),
@@ -333,9 +265,168 @@ class _HomePageContentState extends State<HomePageContent>
   }
 }
 
-// -----------------------------------------------------------------------------
-// Compact videos content for Home: fetch 5 items, show a carousel with dots.
-// -----------------------------------------------------------------------------
+/// ---------------------------------------------------------------------------
+/// Section Card (reusable, polished to match soft white/blue aesthetic)
+/// ---------------------------------------------------------------------------
+class SectionCard extends StatelessWidget {
+  final String title;
+  final IconData icon;
+  final Widget child;
+  final VoidCallback? onSeeAll;
+  final Color? accent;
+
+  const SectionCard({
+    super.key,
+    required this.title,
+    required this.icon,
+    required this.child,
+    this.onSeeAll,
+    this.accent,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final dark = Theme.of(context).brightness == Brightness.dark;
+    final headerIconColor =
+    title.contains('Live')
+        ? (dark ? Colors.redAccent : Colors.red)
+        : (accent ?? AppColors.primary);
+    final seeAllColor = dark ? Colors.lightBlueAccent : AppColors.primary;
+
+    return Container(
+      margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+      decoration: BoxDecoration(
+        borderRadius: BorderRadius.circular(22),
+        color: dark ? const Color(0xFF17181B) : Colors.white,
+        gradient: dark
+            ? null
+            : const LinearGradient(
+          colors: [Colors.white, Color(0xFFF6FAFF)],
+          begin: Alignment.topLeft,
+          end: Alignment.bottomRight,
+        ),
+        border: Border.all(
+          color: dark ? Colors.white12 : const Color(0xFFE8F0FB),
+          width: 1,
+        ),
+        boxShadow: [
+          if (!dark)
+            const BoxShadow(
+              color: Color(0x1F96C0FF), // subtle blue glow
+              blurRadius: 24,
+              offset: Offset(0, 12),
+            ),
+          BoxShadow(
+            color: (dark ? Colors.black : const Color(0xFF9BB7DB)).withOpacity(dark ? 0.35 : 0.08),
+            blurRadius: 16,
+            offset: const Offset(0, 8),
+          ),
+        ],
+      ),
+      child: Padding(
+        padding: const EdgeInsets.fromLTRB(14, 12, 14, 14),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            SectionHeader(
+              icon: icon,
+              title: title,
+              iconColor: headerIconColor,
+              onSeeAll: onSeeAll,
+              seeAllColor: seeAllColor,
+            ),
+            const SizedBox(height: 10),
+            child,
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class SectionHeader extends StatelessWidget {
+  final IconData icon;
+  final String title;
+  final Color iconColor;
+  final VoidCallback? onSeeAll;
+  final Color seeAllColor;
+
+  const SectionHeader({
+    super.key,
+    required this.icon,
+    required this.title,
+    required this.iconColor,
+    required this.seeAllColor,
+    this.onSeeAll,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final dark = Theme.of(context).brightness == Brightness.dark;
+
+    return Row(
+      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+      children: [
+        Row(children: [
+          Container(
+            height: 28,
+            width: 28,
+            decoration: BoxDecoration(
+              borderRadius: BorderRadius.circular(8),
+              color: iconColor.withOpacity(dark ? 0.18 : 0.12),
+              border: Border.all(
+                color: dark ? Colors.white12 : const Color(0xFFE3EEFF),
+              ),
+              boxShadow: [
+                if (!dark)
+                  const BoxShadow(
+                    color: Color(0x1496C0FF),
+                    blurRadius: 12,
+                    offset: Offset(0, 6),
+                  ),
+              ],
+            ),
+            child: Icon(icon, size: 16, color: iconColor),
+          ),
+          const SizedBox(width: 10),
+          Text(
+            title,
+            style: TextStyle(
+              fontSize: 17,
+              fontWeight: FontWeight.w700,
+              color: dark ? Colors.white : Colors.black,
+            ),
+          ),
+        ]),
+        if (onSeeAll != null)
+          InkWell(
+            borderRadius: BorderRadius.circular(8),
+            onTap: onSeeAll,
+            child: const Padding(
+              padding: EdgeInsets.symmetric(horizontal: 6, vertical: 4),
+              child: Row(
+                children: [
+                  Text(
+                    'See All',
+                    style: TextStyle(
+                      fontSize: 13.5,
+                      fontWeight: FontWeight.w600,
+                    ),
+                  ),
+                  SizedBox(width: 4),
+                  Icon(Icons.chevron_right, size: 16),
+                ],
+              ),
+            ),
+          ),
+      ],
+    );
+  }
+}
+
+/// ---------------------------------------------------------------------------
+/// Compact videos content for Home: fetch 5 items, show a carousel with dots.
+/// ---------------------------------------------------------------------------
 class _VideosFive extends StatefulWidget {
   final ValueChanged<bool>? onDataLoaded;
   const _VideosFive({this.onDataLoaded});
@@ -363,25 +454,25 @@ class _VideosFiveState extends State<_VideosFive> {
 
   @override
   Widget build(BuildContext context) {
-    final isDark = Theme.of(context).brightness == Brightness.dark;
+    final dark = Theme.of(context).brightness == Brightness.dark;
 
     return FutureBuilder<List<YoutubeVideo>>(
       future: _future,
       builder: (context, snap) {
         if (snap.connectionState == ConnectionState.waiting) {
-          // simple loading skeleton
+          // loading skeleton
           return SizedBox(
             height: 210,
             child: ListView.separated(
               scrollDirection: Axis.horizontal,
               padding: const EdgeInsets.symmetric(horizontal: 4),
               itemBuilder: (_, __) => Shimmer.fromColors(
-                baseColor: isDark ? Colors.white10 : Colors.black12,
-                highlightColor: isDark ? Colors.white24 : Colors.black26,
+                baseColor: dark ? Colors.white10 : Colors.black12,
+                highlightColor: dark ? Colors.white24 : Colors.black26,
                 child: Container(
                   width: 300,
                   decoration: BoxDecoration(
-                    color: Colors.white,
+                    color: dark ? const Color(0xFF1E1E1E) : Colors.white,
                     borderRadius: BorderRadius.circular(18),
                   ),
                 ),
@@ -396,10 +487,7 @@ class _VideosFiveState extends State<_VideosFive> {
           WidgetsBinding.instance.addPostFrameCallback((_) {
             widget.onDataLoaded?.call(false);
           });
-          return const Padding(
-            padding: EdgeInsets.all(12),
-            child: Text('Failed to load videos'),
-          );
+          return const _InlineInfo(text: 'Failed to load videos');
         }
 
         final items = snap.data ?? const <YoutubeVideo>[];
@@ -408,10 +496,7 @@ class _VideosFiveState extends State<_VideosFive> {
         });
 
         if (items.isEmpty) {
-          return const Padding(
-            padding: EdgeInsets.all(12),
-            child: Text('No videos available'),
-          );
+          return const _InlineInfo(text: 'No videos available');
         }
 
         return Column(
@@ -426,27 +511,59 @@ class _VideosFiveState extends State<_VideosFive> {
               ),
             ),
             const SizedBox(height: 10),
-            Row(
-              mainAxisAlignment: MainAxisAlignment.center,
-              children: List.generate(items.length, (i) {
-                final active = i == _index;
-                return AnimatedContainer(
-                  duration: const Duration(milliseconds: 250),
-                  margin: const EdgeInsets.symmetric(horizontal: 4),
-                  height: 6,
-                  width: active ? 18 : 6,
-                  decoration: BoxDecoration(
-                    color: active
-                        ? (isDark ? Colors.white : AppColors.primary)
-                        : (isDark ? Colors.white24 : Colors.black12),
-                    borderRadius: BorderRadius.circular(10),
-                  ),
-                );
-              }),
-            ),
+            _Dots(count: items.length, index: _index),
           ],
         );
       },
+    );
+  }
+}
+
+class _Dots extends StatelessWidget {
+  final int count;
+  final int index;
+  const _Dots({required this.count, required this.index});
+
+  @override
+  Widget build(BuildContext context) {
+    final dark = Theme.of(context).brightness == Brightness.dark;
+    return Row(
+      mainAxisAlignment: MainAxisAlignment.center,
+      children: List.generate(count, (i) {
+        final active = i == index;
+        return AnimatedContainer(
+          duration: const Duration(milliseconds: 220),
+          margin: const EdgeInsets.symmetric(horizontal: 4),
+          height: 6,
+          width: active ? 18 : 6,
+          decoration: BoxDecoration(
+            color: active
+                ? (dark ? Colors.white : AppColors.primary)
+                : (dark ? Colors.white24 : Colors.black12),
+            borderRadius: BorderRadius.circular(10),
+          ),
+        );
+      }),
+    );
+  }
+}
+
+class _InlineInfo extends StatelessWidget {
+  final String text;
+  const _InlineInfo({required this.text});
+
+  @override
+  Widget build(BuildContext context) {
+    final dark = Theme.of(context).brightness == Brightness.dark;
+    return Padding(
+      padding: const EdgeInsets.all(12),
+      child: Text(
+        text,
+        style: TextStyle(
+          color: dark ? Colors.white70 : Colors.black54,
+          fontWeight: FontWeight.w500,
+        ),
+      ),
     );
   }
 }

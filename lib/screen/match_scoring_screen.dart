@@ -8,7 +8,9 @@ import '../model/match_score_model.dart';
 import '../service/match_youtube_service.dart';
 import '../service/player_service.dart';
 import '../service/match_score_service.dart';
+import '../service/role_players_service.dart';
 import '../theme/color.dart';
+import '../utils/score_log.dart';
 import '../widget/animated_score_card.dart';
 import '../widget/dialog/end_match_dialog.dart';
 import '../widget/last_six_balls_widget.dart';
@@ -18,6 +20,60 @@ import '../widget/shot_type_dialog.dart';
 import '../provider/match_state.dart';
 import '../widget/wicket_type_dialog.dart';
 import 'full_match_detail.dart';
+import 'package:flutter/foundation.dart'; // for kDebugMode
+import 'dart:convert';
+
+// Flip to true only when you want to see verbose logs
+const bool kEnableVerboseLogs = false;
+
+void logv(String msg) {
+  if (kDebugMode && kEnableVerboseLogs) debugPrint(msg);
+}
+// Redact token from URLs in logs
+String _redactToken(String url) {
+  return url.replaceAll(RegExp(r'(api_logged_in_token=)([^&]+)'), r'$1████');
+}
+
+/// Pretty full payload logger (URL + BODY)
+void logFullSubmit(String url, Map<String, String?> body) {
+  if (!kEnableVerboseLogs) return;
+  final clean = Map<String, String?>.from(body)
+    ..removeWhere((k, v) => v == null || v.toString().isEmpty);
+
+  debugPrint('• [SAVE-SCORE][REQ-POST]');
+  debugPrint('  URL  => ${_redactToken(url)}');
+  debugPrint('  BODY => ${jsonEncode(clean)}');
+}
+
+// compact one-line submit log
+void logBallSubmit(Map<String, String> fields) {
+  if (!kDebugMode) return; // avoid release spam
+
+  final payload = <String, String?>{
+    'over': fields['over_number'],
+    'ball': fields['ball_number'],
+    'runs': fields['runs'],
+    'extra_type': fields['extra_run_type'],
+    'extra': fields['extra_run'],
+    'is_wicket': fields['is_wicket'],
+    'wicket_type': fields['wicket_type'],
+    'out_player': fields['out_player'],
+    'run_out_by': fields['run_out_by'],
+    'catch_by': fields['catch_by'],
+
+    // 🔻 add these two (and keep striker id)
+    'striker': fields['on_strike_player_id'],
+    'striker_order': fields['on_strike_player_order'],
+    'non_striker': fields['non_strike_player_id'],
+    'non_striker_order': fields['non_strike_player_order'],
+
+    'bowler': fields['bowler'],
+    'shot': fields['shot'],
+  }..removeWhere((k, v) => v == null || v.isEmpty);
+
+  debugPrint('📤 SUBMIT ${fields['over_number']}.${fields['ball_number']} → ${jsonEncode(payload)}');
+}
+
 
 class AddScoreScreen extends StatefulWidget {
   final int matchId;
@@ -153,6 +209,21 @@ class _AddScoreScreenState extends State<AddScoreScreen>
     super.dispose();
   }
 
+// Batting order tracker (per innings)
+  final Map<int, int> _battingOrder = {}; // playerId -> battingOrder (1..11)
+  int _nextBattingOrder = 1;
+
+  void _resetBattingOrder() {
+    _battingOrder.clear();
+    _nextBattingOrder = 1;
+  }
+
+  void _assignBattingOrderIfMissing(int playerId) {
+    if (playerId <= 0) return;
+    if (!_battingOrder.containsKey(playerId)) {
+      _battingOrder[playerId] = _nextBattingOrder++;
+    }
+  }
 
   Future<void> _init() async {
     try {
@@ -273,10 +344,18 @@ class _AddScoreScreenState extends State<AddScoreScreen>
         return AlertDialog(
           shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
           title: Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               const Icon(Icons.sports_cricket, size: 20),
               const SizedBox(width: 8),
-              Text(title),
+              Expanded( // ← allow the text to wrap instead of overflowing
+                child: Text(
+                  title,
+                  maxLines: 2,
+                  overflow: TextOverflow.ellipsis,
+                  softWrap: true,
+                ),
+              ),
             ],
           ),
           content: SizedBox(
@@ -291,8 +370,13 @@ class _AddScoreScreenState extends State<AddScoreScreen>
                     p['display_name'] ??
                     p['user_login'] ??
                     'Unknown') as String;
+
                 return RadioListTile<int>(
-                  title: Text(name),
+                  title: Text(
+                    name,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis, // ← avoid overflow on long names
+                  ),
                   value: id,
                   groupValue: selectedId,
                   onChanged: (v) {
@@ -317,6 +401,7 @@ class _AddScoreScreenState extends State<AddScoreScreen>
     );
   }
 
+
   Future<void> _selectInitialSecondInningPlayers() async {
     await _showSelectPlayerSheet(isBatsman: true, selectForStriker: true);
     await _showSelectPlayerSheet(isBatsman: true, selectForStriker: false);
@@ -340,6 +425,7 @@ class _AddScoreScreenState extends State<AddScoreScreen>
       _parseCurrentScore(fresh);
     }
     await _refreshBowlerOversFromScorecard();
+
     // Reset used lists
     _usedBatsmen.clear();
     _usedBowlers.clear();
@@ -366,6 +452,31 @@ class _AddScoreScreenState extends State<AddScoreScreen>
       if (id != null) _dismissedBatters.add(id);
     }
 
+    // ---- NEW: Batting-order repair after undo ----
+    // Build the set of batters who have actually appeared this innings
+    final Set<int> _presentBatters = {
+      ..._usedBatsmen,
+      ..._dismissedBatters,
+      if (onStrikePlayerId != null) onStrikePlayerId!,
+      if (nonStrikePlayerId != null) nonStrikePlayerId!,
+    };
+
+    // Prune any order entries that belong to now-removed/undone players
+    _battingOrder.removeWhere((pid, _) => !_presentBatters.contains(pid));
+
+    // Recompute next order as max(existing)+1 (or 1 if none)
+    int maxOrder = 0;
+    for (final o in _battingOrder.values) {
+      if (o > maxOrder) maxOrder = o;
+    }
+    _nextBattingOrder = maxOrder + 1;
+
+    // Seed orders for any present batters that are missing
+    for (final pid in _presentBatters) {
+      _assignBattingOrderIfMissing(pid);
+    }
+    // ---- END NEW ----
+
     Provider.of<MatchState>(context, listen: false).updateScore(
       matchId: widget.matchId,
       runs: runs,
@@ -378,6 +489,7 @@ class _AddScoreScreenState extends State<AddScoreScreen>
     _refreshLastSixBalls();
     setState(() {});
   }
+
 
 
   Future<void> _handleEndInning() async {
@@ -405,8 +517,12 @@ class _AddScoreScreenState extends State<AddScoreScreen>
       // Reload squads
       await _loadSquads();
 
-      // Reset for 2nd innings
+      // Reset for 2nd innings (your logic)
       _startSecondInning();
+
+      // NEW: reset batting order numbering for the new innings
+      _resetBattingOrder(); // ← ensures orders start from 1 again
+
       setState(() {
         overNumber = 0;
         ballNumber = 1;
@@ -416,7 +532,12 @@ class _AddScoreScreenState extends State<AddScoreScreen>
       });
 
       // Select striker/non-striker/bowler (UI prompt)
-      Future.delayed(const Duration(milliseconds: 300), _selectInitialSecondInningPlayers);
+      // NEW: after user picks, seed batting orders for the two openers
+      Future.delayed(const Duration(milliseconds: 300), () async {
+        await _selectInitialSecondInningPlayers();
+        if (onStrikePlayerId != null) _assignBattingOrderIfMissing(onStrikePlayerId!);
+        if (nonStrikePlayerId != null) _assignBattingOrderIfMissing(nonStrikePlayerId!);
+      });
 
       // Immediately refresh score page from server
       Map<String, dynamic>? refreshed;
@@ -443,9 +564,30 @@ class _AddScoreScreenState extends State<AddScoreScreen>
   }
 
 
+
   int _parseInt(dynamic raw) {
     if (raw is int) return raw;
     return int.tryParse(raw?.toString() ?? '') ?? 0;
+  }
+  void _applyBowlerStatsFromApi({int? id}) {
+    final int? bid = id ?? bowlerId;
+    if (bid == null) return;
+
+    final s = _bowlerStatsMap[bid];
+    final oversFromMap = _bowlerOversMap[bid];
+
+    if (s == null && oversFromMap == null) return;
+
+    setState(() {
+      bowlerRunsConceded = (s?['runs'] as int?) ?? bowlerRunsConceded;
+      bowlerWickets      = (s?['wickets'] as int?) ?? bowlerWickets;
+      bowlerMaidens      = (s?['maiden'] as int?) ?? bowlerMaidens;
+      bowlerEconomy      = (s?['econ'] as double?) ?? bowlerEconomy;
+
+      // Prefer API text (e.g., "3.4"), else format from overs map
+      bowlerOversBowled  = (s?['overs']?.toString())
+          ?? _formatOversDisplayFromDouble(oversFromMap ?? 0.0);
+    });
   }
 
   Future<int?> _showExtraRunDialog(String title, String prefix) async {
@@ -458,63 +600,90 @@ class _AddScoreScreenState extends State<AddScoreScreen>
         borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
       ),
       builder: (context) {
-        return Padding(
-          padding: EdgeInsets.only(
-            left: 16,
-            right: 16,
-            bottom: MediaQuery.of(context).viewInsets.bottom + 16,
-            top: 24,
-          ),
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              Text(title, style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
-              const SizedBox(height: 16),
-              Wrap(
-                spacing: 12,
-                runSpacing: 12,
-                children: List.generate(7, (i) {
-                  return ElevatedButton(
-                    style: ElevatedButton.styleFrom(
-                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-                    ),
-                    onPressed: () => Navigator.pop(context, i),
-                    child: Text('$prefix + $i'),
-                  );
-                }),
-              ),
-              const SizedBox(height: 16),
-              Row(
+        final viewInsets = MediaQuery.of(context).viewInsets; // keyboard
+        return SafeArea(
+          child: Padding(
+            padding: EdgeInsets.only(
+              left: 16,
+              right: 16,
+              bottom: viewInsets.bottom + 16,
+              top: 24,
+            ),
+            child: SingleChildScrollView( // ← prevents overflow with keyboard/text scale
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
                 children: [
-                  const Text("Custom:"),
-                  const SizedBox(width: 8),
-                  Expanded(
-                    child: TextField(
-                      controller: controller,
-                      keyboardType: TextInputType.number,
-                      decoration: const InputDecoration(
-                        hintText: "Enter runs",
-                        border: OutlineInputBorder(),
-                        contentPadding: EdgeInsets.symmetric(horizontal: 12),
-                      ),
-                    ),
+                  Text(title, style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
+                  const SizedBox(height: 16),
+
+                  Wrap(
+                    spacing: 12,
+                    runSpacing: 12,
+                    children: List.generate(7, (i) {
+                      return ElevatedButton(
+                        style: ElevatedButton.styleFrom(
+                          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                          minimumSize: const Size(88, 40), // Material min width (safe)
+                        ),
+                        onPressed: () => Navigator.pop(context, i),
+                        child: Text('$prefix + $i', maxLines: 1, overflow: TextOverflow.ellipsis),
+                      );
+                    }),
                   ),
-                  const SizedBox(width: 8),
-                  ElevatedButton(
-                    onPressed: () {
-                      final val = int.tryParse(controller.text);
-                      if (val != null) Navigator.pop(context, val);
-                    },
-                    child: const Text("OK"),
-                  )
+
+                  const SizedBox(height: 16),
+
+                  Row(
+                    children: [
+                      const Flexible(
+                        flex: 0,
+                        child: Text('Custom:', maxLines: 1, overflow: TextOverflow.ellipsis),
+                      ),
+                      const SizedBox(width: 8),
+
+                      // TextField flexes to take remaining space
+                      Expanded(
+                        child: TextField(
+                          controller: controller,
+                          keyboardType: TextInputType.number,
+                          textInputAction: TextInputAction.done,
+                          onSubmitted: (v) {
+                            final val = int.tryParse(v);
+                            if (val != null) Navigator.pop(context, val);
+                          },
+                          decoration: const InputDecoration(
+                            hintText: 'Enter runs',
+                            border: OutlineInputBorder(),
+                            contentPadding: EdgeInsets.symmetric(horizontal: 12),
+                          ),
+                        ),
+                      ),
+
+                      const SizedBox(width: 8),
+
+                      // Constrain the OK button so the Row never overflows
+                      ConstrainedBox(
+                        constraints: const BoxConstraints(minWidth: 72),
+                        child: ElevatedButton(
+                          style: ElevatedButton.styleFrom(minimumSize: const Size(72, 40)),
+                          onPressed: () {
+                            final val = int.tryParse(controller.text);
+                            if (val != null) Navigator.pop(context, val);
+                          },
+                          child: const Text('OK', overflow: TextOverflow.ellipsis),
+                        ),
+                      ),
+                    ],
+                  ),
                 ],
-              )
-            ],
+              ),
+            ),
           ),
         );
       },
     );
   }
+
 
 
 
@@ -613,7 +782,142 @@ class _AddScoreScreenState extends State<AddScoreScreen>
       return false;
     }
   }
+  Future<void> _loadSquads() async {
+    if (_teamOneId == null || _teamTwoId == null || _firstInningTeamId == null) {
+      _showError("Match details not available for squads.");
+      debugPrint('🚫 Missing IDs → team1=$_teamOneId, team2=$_teamTwoId, firstInning=$_firstInningTeamId');
+      return;
+    }
 
+    // Decide who bats/bowls in the CURRENT inning
+    final battingTeamId = !_firstInningClosed
+        ? _firstInningTeamId!
+        : (_firstInningTeamId == _teamOneId ? _teamTwoId! : _teamOneId!);
+    final bowlingTeamId = battingTeamId == _teamOneId! ? _teamTwoId! : _teamOneId!;
+
+    final battingIds = battingTeamId == _teamOneId! ? _teamOne11 : _teamTwo11;
+    final bowlingIds = bowlingTeamId == _teamOneId! ? _teamOne11 : _teamTwo11;
+
+    debugPrint('🧠 Inning=${_firstInningClosed ? "2nd" : "1st"} | BattingTeamID=$battingTeamId | BowlingTeamID=$bowlingTeamId');
+
+    List<Map<String, dynamic>> _mapRoster(List<dynamic> src) => src
+        .map<Map<String, dynamic>>((p) {
+      final id = int.tryParse('${p['ID']}') ?? 0;
+      final name = (p['display_name'] ?? p['user_login'] ?? '').toString();
+      return {'id': id, 'name': name};
+    })
+        .where((p) => (p['id'] as int) > 0)
+        .toList();
+
+    List<Map<String, dynamic>> _filterByIds(List<Map<String, dynamic>> roster, List<int> ids) {
+      final set = ids.toSet();
+      return roster.where((p) => set.contains(p['id'] as int)).toList();
+    }
+
+    try {
+      // 1) Always fetch full rosters (stable fallback + for names)
+      final t1 = await PlayerService.fetchTeamPlayers(teamId: _teamOneId!, apiToken: widget.token);
+      final t2 = await PlayerService.fetchTeamPlayers(teamId: _teamTwoId!, apiToken: widget.token);
+      _team1Squad = _mapRoster(t1);
+      _team2Squad = _mapRoster(t2);
+
+      // 2) Role endpoints (best-effort; tolerate odd shapes via RolePlayersService)
+      final results = await Future.wait([
+        RolePlayersService.fetchBattersByTeam(matchId: widget.matchId, teamId: _teamOneId!),
+        RolePlayersService.fetchBowlersByTeam(matchId: widget.matchId, teamId: _teamOneId!),
+        RolePlayersService.fetchBattersByTeam(matchId: widget.matchId, teamId: _teamTwoId!),
+        RolePlayersService.fetchBowlersByTeam(matchId: widget.matchId, teamId: _teamTwoId!),
+      ]);
+
+      final t1Batters = results[0]; // [{id,name,is_out,stats{r,b,4s,6s,sr,order,out_by}}]
+      final t1Bowlers = results[1]; // [{id,name,stats{overs,balls,maiden,runs,wickets,economy}}]
+      final t2Batters = results[2];
+      final t2Bowlers = results[3];
+
+      // 3) Build CURRENT batting/bowling lists (prefer role lists; fallback to XI from roster)
+      final battingRoster = (battingTeamId == _teamOneId!) ? _team1Squad : _team2Squad;
+      final bowlingRoster = (bowlingTeamId == _teamOneId!) ? _team1Squad : _team2Squad;
+
+      final roleBatters = (battingTeamId == _teamOneId!) ? t1Batters : t2Batters;
+      final roleBowlers = (bowlingTeamId == _teamOneId!) ? t1Bowlers : t2Bowlers;
+
+      final effectiveBatters = roleBatters.isNotEmpty
+          ? roleBatters.map((e) => {
+        'id'    : e['id'],
+        'name'  : e['name'],
+        'is_out': e['is_out'] ?? 0,
+        'stats' : e['stats'] ?? const {},
+      }).toList()
+          : _filterByIds(battingRoster, battingIds).map((p) => {
+        'id'    : p['id'],
+        'name'  : p['name'],
+        'is_out': 0,
+        'stats' : const {'r':0,'b':0,'4s':0,'6s':0,'sr':0.0,'order':0,'out_by':''},
+      }).toList();
+
+      final effectiveBowlers = roleBowlers.isNotEmpty
+          ? roleBowlers.map((e) => {
+        'id'   : e['id'],
+        'name' : e['name'],
+        // we keep stats only on _bowlerStatsMap/_bowlerOversMap for UI
+      }).toList()
+          : _filterByIds(bowlingRoster, bowlingIds);
+
+      // 4) Update dismissed list from API (players already OUT must not be selectable)
+      for (final p in effectiveBatters) {
+        if ((p['is_out'] ?? 0) == 1) {
+          final pid = p['id'] as int;
+          if (!_dismissedBatters.contains(pid)) _dismissedBatters.add(pid);
+        }
+      }
+
+      // 5) Hydrate bowler stats/overs maps from BOTH teams’ role bowlers
+      _bowlerStatsMap.clear();
+      _bowlerOversMap.clear();
+      void _ingestBowlers(List<Map<String, dynamic>> blist) {
+        for (final b in blist) {
+          final id = b['id'] as int;
+          final stats = (b['stats'] as Map<String, dynamic>?) ?? const {};
+          final ov   = _parseInt(stats['overs']);         // int or string handled by _parseInt
+          final balls= _parseInt(stats['balls']);         // 0..5
+          final runs = _parseInt(stats['runs']);
+          final wkts = _parseInt(stats['wickets']);
+          final maid = _parseInt(stats['maiden']);
+          final econ = double.tryParse('${stats['economy'] ?? 0}') ?? 0.0;
+
+          _bowlerStatsMap[id] = {
+            'runs'   : runs,
+            'wickets': wkts,
+            'maiden' : maid,
+            'overs'  : '$ov.${balls.clamp(0,5)}',
+            'econ'   : econ,
+          };
+          _bowlerOversMap[id] = ov + (balls.clamp(0,5) / 6.0);
+        }
+      }
+      _ingestBowlers(t1Bowlers);
+      _ingestBowlers(t2Bowlers);
+
+      setState(() {
+        _battingSidePlayers = effectiveBatters;   // with stats/is_out
+        _bowlingSidePlayers = effectiveBowlers;   // names; stats in _bowlerStatsMap
+      });
+
+      // 6) Last resort (very rare): if bowlers still empty, show XI slice
+      if (_bowlingSidePlayers.isEmpty) {
+        _bowlingSidePlayers = _filterByIds(bowlingRoster, bowlingIds);
+        setState(() {});
+      }
+
+      debugPrint('✅ Batters=${_battingSidePlayers.length} | Bowlers=${_bowlingSidePlayers.length} (roleBowlers=${roleBowlers.length})');
+    } catch (e, st) {
+      _showError("Failed to load squads");
+      debugPrint('❌ Error loading squads: $e\n$st');
+    }
+  }
+
+
+/*
   Future<void> _loadSquads() async {
     if (_teamOneId == null || _teamTwoId == null || _firstInningTeamId == null) {
       _showError("Match details not available for squads.");
@@ -679,6 +983,7 @@ class _AddScoreScreenState extends State<AddScoreScreen>
       debugPrint('❌ Error loading squads: $e\n$st');
     }
   }
+  */
 
   Future<Map<String, dynamic>?> _fetchCurrentScoreData() async {
     final uri = Uri.parse(
@@ -733,7 +1038,6 @@ class _AddScoreScreenState extends State<AddScoreScreen>
   }
 
   final Map<int, Map<String, dynamic>> _bowlerStatsMap = {};
-
   void _parseCurrentScore(Map<String, dynamic> body, {bool overridePlayers = true}) {
     debugPrint('🔄 _parseCurrentScore called');
 
@@ -766,8 +1070,10 @@ class _AddScoreScreenState extends State<AddScoreScreen>
 
     // Also add the current bowler from cs['bowler']
     final bwSingle = cs['bowler'] as Map<String, dynamic>?;
+    int? apiBowlerId; // NEW
     if (bwSingle != null) {
       final pid = _parseInt(bwSingle['id']);
+      apiBowlerId = pid; // NEW
       final data = bwSingle['data'] as Map<String, dynamic>? ?? {};
       _bowlerStatsMap[pid] = {
         'runs'   : _parseInt(data['runs']),
@@ -803,6 +1109,27 @@ class _AddScoreScreenState extends State<AddScoreScreen>
     final on  = cs['on_strike']  as Map<String, dynamic>?;
     final non = cs['non_strike'] as Map<String, dynamic>?;
 
+    // Seed batting order for current open batsmen (safe even if overridePlayers=false)
+    final int onId  = on  != null ? _parseInt(on['id'])  : 0;
+    final int nonId = non != null ? _parseInt(non['id']) : 0;
+    if (onId  > 0) _assignBattingOrderIfMissing(onId);
+    if (nonId > 0) _assignBattingOrderIfMissing(nonId);
+
+    // NEW: decide which bowler’s stats we’ll apply to the UI
+    // Prefer the API current bowler id; else stick to the currently selected bowlerId.
+    final int? statsForBowlerId = apiBowlerId ?? bowlerId;
+    final Map<String, dynamic>? statsForBowler =
+    (statsForBowlerId != null) ? _bowlerStatsMap[statsForBowlerId] : null;
+
+    // NEW: precompute a safe overs text fallback from overs map if API didn’t include it
+    String? oversText;
+    if (statsForBowler != null && statsForBowler['overs'] != null) {
+      oversText = statsForBowler['overs'].toString();
+    } else if (statsForBowlerId != null && _bowlerOversMap.containsKey(statsForBowlerId)) {
+      final ov = _bowlerOversMap[statsForBowlerId]!;
+      oversText = _formatOversDisplayFromDouble(ov);
+    }
+
     if (!mounted) return;
     setState(() {
       runs           = _parseInt(cs['total_runs']);
@@ -833,19 +1160,13 @@ class _AddScoreScreenState extends State<AddScoreScreen>
           nonStrikeName     = non['name']?.toString();
           nonStrikeRuns     = _parseInt(non['runs']);
         }
-        if (bwSingle != null) {
-          final sid = _parseInt(bwSingle['id']);
-          bowlerId   = sid;
-          bowlerName = bwSingle['name']?.toString();
-          final stats = _bowlerStatsMap[sid]!;
-          bowlerRunsConceded = stats['runs'] as int;
-          bowlerWickets      = stats['wickets'] as int;
-          bowlerMaidens      = stats['maiden'] as int;
-          bowlerOversBowled  = stats['overs'] as String;
-          bowlerEconomy      = stats['econ'] as double;
+        if (bwSingle != null && apiBowlerId != null) {
+          bowlerId   = apiBowlerId;                    // NEW (set id from API)
+          bowlerName = bwSingle['name']?.toString();   // NEW (set name from API)
         }
       }
 
+      // Timeline
       final tl = inning['timeline'] as List<dynamic>?;
       if (tl != null && tl.isNotEmpty) {
         timeline = tl
@@ -854,6 +1175,17 @@ class _AddScoreScreenState extends State<AddScoreScreen>
             .toList();
       } else {
         timeline = ['Loaded: $runs–$wickets at $doneOvers.$doneBalls'];
+      }
+
+      // NEW: ALWAYS refresh bowler figures in the card from API/stat maps
+      if (statsForBowlerId != null && statsForBowler != null) {
+        bowlerRunsConceded = (statsForBowler['runs'] as int?) ?? 0;
+        bowlerWickets      = (statsForBowler['wickets'] as int?) ?? 0;
+        bowlerMaidens      = (statsForBowler['maiden'] as int?) ?? 0;
+        bowlerEconomy      = (statsForBowler['econ'] as double?) ?? 0.0;
+      }
+      if (oversText != null) {
+        bowlerOversBowled = oversText; // e.g. "3.4"
       }
 
       if (_firstInningClosed) {
@@ -882,6 +1214,7 @@ class _AddScoreScreenState extends State<AddScoreScreen>
       }
     });
   }
+
 
   /// ------------- SUBMIT SCORE (logic preserved; UI-only polish) -------------
   Future<void> _submitScore() async {
@@ -992,7 +1325,7 @@ class _AddScoreScreenState extends State<AddScoreScreen>
             outAtStriker = (choice ?? OutBatsman.striker) == OutBatsman.striker;
             outPlayerId  = outAtStriker ? onStrikePlayerId! : nonStrikePlayerId!;
 
-            runOutBy = await _pickBowlingSidePlayer(title: 'Who effected the run out?');
+            runOutBy = await _pickBowlingSidePlayer(title: 'Run Out By?');
             if (runOutBy == null) { _showError('Please select the fielder for Run Out'); return; }
             break;
 
@@ -1042,6 +1375,13 @@ class _AddScoreScreenState extends State<AddScoreScreen>
       final int submitStrikerId    = onStrikePlayerId!;
       final int submitNonStrikerId = nonStrikePlayerId!;
 
+      // NEW: ensure both batters have stable batting orders and fetch them
+      _assignBattingOrderIfMissing(submitStrikerId);
+      _assignBattingOrderIfMissing(submitNonStrikerId);
+      final int strikerOrder    = _battingOrder[submitStrikerId] ?? 1;
+      final int nonStrikerOrder = _battingOrder[submitNonStrikerId] ?? (strikerOrder == 1 ? 2 : 1);
+      // END NEW
+
       final bool isEndOfOver = ballNumber == 6;
       final bool oddRun      = batterRuns.isOdd;
 
@@ -1067,15 +1407,67 @@ class _AddScoreScreenState extends State<AddScoreScreen>
         _usedBatsmen.add(submitStrikerId);
       }
 
+
+      // ---- DEBUG: build the exact API body we're about to send ----
+      final endpointUrl =
+          'https://cricjust.in/wp-json/custom-api-for-cricket/save-cricket-match-score'
+          '?api_logged_in_token=${widget.token}&match_id=${widget.matchId}';
+
+// Mirror MatchScoreRequest.toFormFields() naming (snake_case)
+      final Map<String, String?> _submitFields = {
+        'match_id'                : '${widget.matchId}',
+        'batting_team_id'         : '${!_firstInningClosed ? _firstInningTeamId! : (_firstInningTeamId == _teamOneId! ? _teamTwoId! : _teamOneId!)}',
+        'on_strike_player_id'     : '$submitStrikerId',
+        'on_strike_player_order'  : '$strikerOrder',
+        'non_strike_player_id'    : '$submitNonStrikerId',
+        'non_strike_player_order' : '$nonStrikerOrder',
+        'bowler'                  : '${bowlerId!}',
+        'over_number'             : '${overNumber + 1}',
+        'ball_number'             : '$ballNumber',
+        'runs'                    : '$batterRuns',
+
+        // extras
+        'extra_run_type'          : (extraType == '0') ? null : extraType,
+        'extra_run'               : (extraRuns > 0) ? '$extraRuns' : null,
+
+        // wicket payload
+        'is_wicket'               : wicketFalls ? '1' : '0',
+        'wicket_type'             : formattedWicketType,
+        'wicket_type_text'        : formattedWicketType,
+        'out_player'              : outPlayerId != null ? '$outPlayerId' : null,
+        'run_out_by'              : runOutBy != null ? '$runOutBy' : null,
+        'catch_by'                : catchBy != null ? '$catchBy' : null,
+
+        // per-ball WK override
+        'wktkpr_id'               : wicketKeeperForThisBall != null ? '$wicketKeeperForThisBall' : null,
+
+        // meta
+        'shot'                    : _selectedShotType,
+      };
+
+// Full structured log (redacts token), plus your compact one-liner:
+      logFullSubmit(endpointUrl, _submitFields);
+      logBallSubmit(_submitFields.map((k, v) => MapEntry(k, v ?? '')));
+
+// Also useful to see orders being sent
+      if (kEnableVerboseLogs) {
+        debugPrint('🧮 ORDERS => striker($submitStrikerId)=$strikerOrder, '
+            'non($submitNonStrikerId)=$nonStrikerOrder, map=$_battingOrder');
+      }
+
+
       final req = MatchScoreRequest(
         matchId: widget.matchId,
         battingTeamId: !_firstInningClosed
             ? _firstInningTeamId!
             : (_firstInningTeamId == _teamOneId! ? _teamTwoId! : _teamOneId!),
+
         onStrikePlayerId: submitStrikerId,
-        onStrikePlayerOrder: 1,
+        onStrikePlayerOrder: strikerOrder,        // NEW: send computed order
+
         nonStrikePlayerId: submitNonStrikerId,
-        nonStrikePlayerOrder: 2,
+        nonStrikePlayerOrder: nonStrikerOrder,    // NEW: send computed order
+
         bowler: bowlerId!,
         overNumber: overNumber + 1,
         ballNumber: ballNumber,
@@ -1091,11 +1483,17 @@ class _AddScoreScreenState extends State<AddScoreScreen>
         wicketType: formattedWicketType,
         runOutBy: runOutBy,
         catchBy: catchBy,
+        wicketTypeText: formattedWicketType,    // send label here too
 
-        // per-ball WK override (falls back to team default if null)
+        // per-ball WK override
         wktkprId: wicketKeeperForThisBall ?? _currentWicketKeeperId,
+
         shot: _selectedShotType,
+        // commentry: 'optional free-text if you want'
+        // per-ball WK override (falls back to team default if null)
       );
+      final body = req.toFormFields();
+      ScoreLog.ballPayload(body); // <-- prints striker_order & non_striker_order
 
       final success = await MatchScoreService.submitScore(req, widget.token, context);
       if (!success) { _showError('❌ Failed to submit score.'); return; }
@@ -1134,6 +1532,8 @@ class _AddScoreScreenState extends State<AddScoreScreen>
         await _refreshBowlerOversFromScorecard();
         _checkMatchResult(refreshed);
         setState(() {});
+        _applyBowlerStatsFromApi(); // make sure visible card shows the latest API figures
+
       }
       _refreshLastSixBalls(delayMs: 120);
 
@@ -1263,7 +1663,7 @@ class _AddScoreScreenState extends State<AddScoreScreen>
       return ok ? null : 'Enter a valid YouTube link';
     }
 
-    final newUrl = await showDialog<String>(
+    final action = await showDialog<YoutubeEditAction>(
       context: context,
       builder: (_) => AlertDialog(
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
@@ -1282,10 +1682,15 @@ class _AddScoreScreenState extends State<AddScoreScreen>
         ),
         actions: [
           TextButton(onPressed: () => Navigator.pop(context), child: const Text('Cancel')),
+          TextButton(
+            style: TextButton.styleFrom(foregroundColor: Colors.red),
+            onPressed: () => Navigator.pop(context, const YoutubeEditAction.remove()),
+            child: const Text('Remove link'),
+          ),
           ElevatedButton(
             onPressed: () {
               if (formKey.currentState!.validate()) {
-                Navigator.pop(context, ctrl.text.trim());
+                Navigator.pop(context, YoutubeEditAction.save(ctrl.text.trim()));
               }
             },
             child: const Text('Save'),
@@ -1294,12 +1699,33 @@ class _AddScoreScreenState extends State<AddScoreScreen>
       ),
     );
 
-    if (newUrl == null) return;
+    if (action == null) return;
 
+    if (action.isRemove) {
+      // If your backend clears on empty string, this is enough.
+      final resp = await MatchYoutubeService.updateYoutube(
+        apiToken: widget.token,
+        matchId: widget.matchId,
+        youtubeUrl: '', // or call a dedicated remove endpoint if you have one
+      );
+
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text(resp.message), backgroundColor: resp.ok ? Colors.green : Colors.red),
+      );
+
+      if (resp.ok) {
+        setState(() => _youtubeUrl = null); // UI falls back to TV
+        await _fetchMatchDetails();         // sync with server
+      }
+      return;
+    }
+
+    // Save new URL
     final resp = await MatchYoutubeService.updateYoutube(
       apiToken: widget.token,
       matchId: widget.matchId,
-      youtubeUrl: newUrl,
+      youtubeUrl: action.url!,
     );
 
     if (!mounted) return;
@@ -1308,10 +1734,11 @@ class _AddScoreScreenState extends State<AddScoreScreen>
     );
 
     if (resp.ok) {
-      setState(() => _youtubeUrl = newUrl);
+      setState(() => _youtubeUrl = action.url);
       await _fetchMatchDetails();
     }
   }
+
 
 
   void _advanceBall() {
@@ -1403,7 +1830,7 @@ class _AddScoreScreenState extends State<AddScoreScreen>
     wicketType = null;
   }
 
-  void _showBowlerSelectionAfterOver() {
+ /* void _showBowlerSelectionAfterOver() {
     WidgetsBinding.instance.addPostFrameCallback((_) {
       _showSelectPlayerSheet(isBatsman: false);
       ScaffoldMessenger.of(context).showSnackBar(
@@ -1416,6 +1843,26 @@ class _AddScoreScreenState extends State<AddScoreScreen>
     }
     );
   }
+*/
+  void _showBowlerSelectionAfterOver() {
+    WidgetsBinding.instance.addPostFrameCallback((_) async {
+      try {
+        await _loadSquads(); // pull role endpoints + roster again
+        await _refreshBowlerOversFromScorecard();
+        await _updateLastCompletedOverBowler();
+      } catch (_) {}
+      _showSelectPlayerSheet(isBatsman: false);
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Over completed. Please select a new bowler.'),
+          duration: Duration(seconds: 2),
+          backgroundColor: Colors.teal,
+        ),
+      );
+    });
+  }
+
+
   void _refreshLastSixBalls({int delayMs = 0}) {
     if (!mounted) return;
     Future.delayed(Duration(milliseconds: delayMs), () {
@@ -1487,6 +1934,8 @@ class _AddScoreScreenState extends State<AddScoreScreen>
         isWicket   = false;
         wicketType = null;
       });
+
+      _assignBattingOrderIfMissing(newId); // NEW: order for replacement batter
 
       ScaffoldMessenger.of(context)
         ..hideCurrentSnackBar()
@@ -1561,6 +2010,8 @@ class _AddScoreScreenState extends State<AddScoreScreen>
       wicketType = null;
     });
 
+    _assignBattingOrderIfMissing(newId); // NEW: order for replacement batter
+
     ScaffoldMessenger.of(context)
       ..hideCurrentSnackBar()
       ..showSnackBar(
@@ -1570,6 +2021,7 @@ class _AddScoreScreenState extends State<AddScoreScreen>
         ),
       );
   }
+
 
 
 
@@ -1647,10 +2099,11 @@ class _AddScoreScreenState extends State<AddScoreScreen>
           child: ListView.builder(
             itemCount: available.length,
             itemBuilder: (_, i) {
-              final p = available[i];
-              final id = p['id'] as int;
-              final name = (p['name'] ?? p['display_name'] ?? p['user_login'] ?? 'Unnamed').toString();
+              final p   = available[i];
+              final id  = p['id'] as int;
+              final name= (p['name'] ?? p['display_name'] ?? p['user_login'] ?? 'Unnamed').toString();
 
+              // ---------- Bowler picker ----------
               if (!isBatsman) {
                 final ob = _bowlerOversMap[id] ?? 0.0;
                 final displayOvers = _formatOversDisplayFromDouble(ob);
@@ -1658,10 +2111,20 @@ class _AddScoreScreenState extends State<AddScoreScreen>
                 final hasQuota = _bowlerMaxOvers <= 0 ? true : completed < _bowlerMaxOvers;
                 final consecutiveBlocked = (_lastBowlerId != null && id == _lastBowlerId);
 
+                final stats = _bowlerStatsMap[id];
+                final maid  = (stats?['maiden'] as int?) ?? 0;
+                final runs  = (stats?['runs'] as int?) ?? 0;
+                final wkts  = (stats?['wickets'] as int?) ?? 0;
+                final econ  = (stats?['econ'] as double?) ?? 0.0;
+
                 return ListTile(
                   leading: CircleAvatar(child: Text(name.isNotEmpty ? name[0] : '?')),
-                  title: Text(name),
-                  subtitle: Text('$displayOvers / $_bowlerMaxOvers.0 overs'),
+                  title: Text(name, maxLines: 1, overflow: TextOverflow.ellipsis),
+                  subtitle: Text(
+                    '$displayOvers / ${_bowlerMaxOvers > 0 ? "${_bowlerMaxOvers}.0" : "–"}  •  M:$maid  R:$runs  W:$wkts  Econs:${econ.toStringAsFixed(2)}',
+                    maxLines: 2,
+                    overflow: TextOverflow.ellipsis,
+                  ),
                   enabled: !consecutiveBlocked && hasQuota,
                   onTap: () {
                     if (!hasQuota) {
@@ -1676,13 +2139,12 @@ class _AddScoreScreenState extends State<AddScoreScreen>
                     bowlerId = id;
                     bowlerName = name;
 
-                    final stats = _bowlerStatsMap[id];
                     if (stats != null) {
-                      bowlerRunsConceded = (stats['runs'] as int?) ?? 0;
-                      bowlerWickets      = (stats['wickets'] as int?) ?? 0;
-                      bowlerMaidens      = (stats['maiden'] as int?) ?? 0;
+                      bowlerRunsConceded = runs;
+                      bowlerWickets      = wkts;
+                      bowlerMaidens      = maid;
                       bowlerOversBowled  = (stats['overs']?.toString()) ?? displayOvers;
-                      bowlerEconomy      = (stats['econ'] as double?) ?? 0.0;
+                      bowlerEconomy      = econ;
                     } else {
                       bowlerRunsConceded = 0;
                       bowlerWickets      = 0;
@@ -1697,10 +2159,37 @@ class _AddScoreScreenState extends State<AddScoreScreen>
                 );
               }
 
+              // ---------- Batsman picker ----------
+              final stats = (p['stats'] as Map<String, dynamic>?) ?? const {};
+              final r     = _parseInt(stats['r']);
+              final b     = _parseInt(stats['b']);
+              final fours = _parseInt(stats['4s']);
+              final sixes = _parseInt(stats['6s']);
+              final sr    = double.tryParse('${stats['sr'] ?? 0}') ?? 0.0;
+              final outBy = (stats['out_by'] ?? '').toString();
+              final apiOut = (p['is_out'] ?? 0) == 1;
+
+              final alreadyUsed   = _usedBatsmen.contains(id);
+              final alreadyDismissed = _dismissedBatters.contains(id) || apiOut;
+
+              // Details line
+              final bits = <String>[
+                '$r (${b}b)',
+                '4s:$fours',
+                '6s:$sixes',
+                'SR:${sr.toStringAsFixed(0)}',
+                if (outBy.isNotEmpty && outBy != '0') 'out: $outBy',
+              ];
+
               return ListTile(
                 leading: CircleAvatar(child: Text(name.isNotEmpty ? name[0] : '?')),
-                title: Text(name),
-                onTap: () {
+                title: Text(name, maxLines: 1, overflow: TextOverflow.ellipsis),
+                subtitle: Text(bits.join(' • '), maxLines: 2, overflow: TextOverflow.ellipsis),
+                trailing: alreadyDismissed
+                    ? const Chip(label: Text('OUT'), visualDensity: VisualDensity.compact)
+                    : (alreadyUsed ? const Chip(label: Text('USED'), visualDensity: VisualDensity.compact) : null),
+                enabled: !alreadyDismissed, // 🔒 do not allow OUT again
+                onTap: !alreadyDismissed ? () {
                   if (selectForStriker == true && id == nonStrikePlayerId) {
                     _showError('This player is already the non-striker.');
                     return;
@@ -1715,15 +2204,18 @@ class _AddScoreScreenState extends State<AddScoreScreen>
                     onStrikeName     = name;
                     onStrikeRuns     = 0;
                     onStrikeBalls    = 0;
+                    _assignBattingOrderIfMissing(id);
                   } else if (selectForStriker == false) {
                     nonStrikePlayerId = id;
                     nonStrikeName     = name;
                     nonStrikeRuns     = 0;
                     nonStrikeBalls    = 0;
+                    _assignBattingOrderIfMissing(id);
                   } else {
                     if (onStrikePlayerId == null) {
                       onStrikePlayerId = id; onStrikeName = name;
                       onStrikeRuns = 0; onStrikeBalls = 0;
+                      _assignBattingOrderIfMissing(id);
                     } else {
                       if (id == onStrikePlayerId) {
                         _showError('This player is already the striker.');
@@ -1731,12 +2223,13 @@ class _AddScoreScreenState extends State<AddScoreScreen>
                       }
                       nonStrikePlayerId = id; nonStrikeName = name;
                       nonStrikeRuns = 0; nonStrikeBalls = 0;
+                      _assignBattingOrderIfMissing(id);
                     }
                   }
 
                   setState(() {});
                   Navigator.pop(context, id);
-                },
+                } : null,
               );
             },
           ),
@@ -1744,6 +2237,8 @@ class _AddScoreScreenState extends State<AddScoreScreen>
       ),
     );
   }
+
+
   Future<void> _updateLastCompletedOverBowler() async {
     try {
       final current = await MatchScoreService.getCurrentScore(widget.matchId, widget.token);
@@ -1792,21 +2287,89 @@ class _AddScoreScreenState extends State<AddScoreScreen>
   Future<void> _refreshBowlerOversFromScorecard() async {
     if (_teamOneId == null || _teamTwoId == null || _firstInningTeamId == null) return;
 
-    final battingTeamId = !_firstInningClosed
-        ? _firstInningTeamId!
-        : (_firstInningTeamId == _teamOneId! ? _teamTwoId! : _teamOneId!);
+    try {
+      // Work out who is fielding right now
+      final battingTeamId = !_firstInningClosed
+          ? _firstInningTeamId!
+          : (_firstInningTeamId == _teamOneId! ? _teamTwoId! : _teamOneId!);
+      final fieldingTeamId = (battingTeamId == _teamOneId!) ? _teamTwoId! : _teamOneId!;
 
-    final fieldingTeamId = (battingTeamId == _teamOneId!) ? _teamTwoId! : _teamOneId!;
+      // Map<int, double> where value is overs as decimal (e.g. 3.2 = 3 overs 2 balls)
+      final fetched = await MatchScoreService.fetchBowlerOversFromScorecard(
+        matchId: widget.matchId,
+        fieldingTeamId: fieldingTeamId,
+      );
 
-    final map = await MatchScoreService.fetchBowlerOversFromScorecard(
-      matchId: widget.matchId,
-      fieldingTeamId: fieldingTeamId,
-    );
+      if (!mounted || fetched.isEmpty) {
+        setState(() {
+          _bowlerOversMap = fetched; // still store whatever we got (even if empty)
+        });
+        return;
+      }
 
-    setState(() {
-      _bowlerOversMap = map;
-    });
+      // Merge into local maps
+      // (keep any existing entries we might have collected from other sources)
+      fetched.forEach((pid, ob) {
+        _bowlerOversMap[pid] = ob;
+
+        final oversText = _formatOversDisplayFromDouble(ob);
+        final stats = _bowlerStatsMap[pid];
+
+        if (stats != null) {
+          // Update overs text and compute economy if API didn't give it
+          stats['overs'] = oversText;
+          final runs = (stats['runs'] as int?) ?? 0;
+          final econ = (stats['econ'] as double?) ?? 0.0;
+          if (econ == 0.0) {
+            final ovd = ob; // ob is decimal overs
+            stats['econ'] = ovd > 0 ? runs / ovd : 0.0;
+          }
+        } else {
+          // Seed minimal stats so UI has something to show
+          _bowlerStatsMap[pid] = {
+            'runs': 0,
+            'wickets': 0,
+            'maiden': 0,
+            'overs': oversText,
+            'econ': 0.0,
+          };
+        }
+      });
+
+      // If a bowler is currently selected, reflect latest figures on the card
+      if (bowlerId != null) {
+        final st = _bowlerStatsMap[bowlerId!];
+        if (st != null) {
+          setState(() {
+            bowlerOversBowled  = (st['overs']?.toString()) ?? bowlerOversBowled;
+            bowlerMaidens      = (st['maiden'] as int?) ?? bowlerMaidens;
+            bowlerRunsConceded = (st['runs'] as int?) ?? bowlerRunsConceded;
+            bowlerWickets      = (st['wickets'] as int?) ?? bowlerWickets;
+
+            final econ = (st['econ'] as double?) ?? 0.0;
+            if (econ > 0) {
+              bowlerEconomy = econ;
+            } else {
+              final ob = _bowlerOversMap[bowlerId!] ?? 0.0;
+              bowlerEconomy = ob > 0 ? bowlerRunsConceded / ob : 0.0;
+            }
+          });
+        } else {
+          setState(() {
+            // At least update overs from fetched map for the current bowler
+            final ob = _bowlerOversMap[bowlerId!];
+            if (ob != null) bowlerOversBowled = _formatOversDisplayFromDouble(ob);
+          });
+        }
+      } else {
+        // No selected bowler; still notify UI of new overs map
+        setState(() {});
+      }
+    } catch (e, st) {
+      debugPrint('refreshBowlerOversFromScorecard error: $e\n$st');
+    }
   }
+
 
   // ---------- BEAUTIFIED UI (logic unchanged) ----------
   @override
@@ -2024,22 +2587,19 @@ class _AddScoreScreenState extends State<AddScoreScreen>
                     onUndo: _undoLastBall,
                     onEndInning: _handleEndInning,
                     onEndMatch: () async {
-                      if ((_teamOneName == null || _teamOneName!.trim().isEmpty) ||
-                          (_teamTwoName == null || _teamTwoName!.trim().isEmpty)) {
+                      // make sure team names exist
+                      if ((_teamOneName ?? '').trim().isEmpty || (_teamTwoName ?? '').trim().isEmpty) {
                         await _fetchMatchDetails();
                       }
 
                       final teams = [
                         if (_teamOneId != null)
-                          {'team_id': _teamOneId!, 'team_name': (_teamOneName ?? '').trim()},
+                          {'team_id': _teamOneId!, 'team_name': (_teamOneName ?? '').trim().isEmpty ? 'Team ${_teamOneId!}' : _teamOneName!.trim()},
                         if (_teamTwoId != null)
-                          {'team_id': _teamTwoId!, 'team_name': (_teamTwoName ?? '').trim()},
-                      ].map((t) {
-                        final name = (t['team_name'] as String);
-                        return {'team_id': t['team_id'], 'team_name': name.isEmpty ? 'Team ${t['team_id']}' : name};
-                      }).toList();
+                          {'team_id': _teamTwoId!, 'team_name': (_teamTwoName ?? '').trim().isEmpty ? 'Team ${_teamTwoId!}' : _teamTwoName!.trim()},
+                      ];
 
-                      final newMatchId = await showEndMatchDialog(
+                      final result = await showEndMatchDialog(
                         context: context,
                         matchId: widget.matchId,
                         token: widget.token,
@@ -2047,26 +2607,28 @@ class _AddScoreScreenState extends State<AddScoreScreen>
                       );
                       if (!mounted) return;
 
-                      if (newMatchId != null && newMatchId > 0) {
-                        Navigator.of(context).pushAndRemoveUntil(
-                          MaterialPageRoute(
-                            builder: (_) => AddScoreScreen(
-                              matchId: newMatchId,
-                              token: widget.token,
-                            ),
-                          ),
-                              (route) => false,
-                        );
-                      } else {
-                        Navigator.of(context).pushAndRemoveUntil(
-                          MaterialPageRoute(
-                            builder: (_) => FullMatchDetail(matchId: widget.matchId),
-                          ),
-                              (route) => false,
-                        );
+                      // 🛑 User pressed Cancel or back → stay on scoring page
+                      if (result == kEndMatchCancelled) {
+                        return;
                       }
+
+                      // 🏏 Super Over created → go to its scoring screen
+                      if (result != null && result > 0) {
+                        Navigator.of(context).pushReplacement(
+                          MaterialPageRoute(
+                            builder: (_) => AddScoreScreen(matchId: result, token: widget.token),
+                          ),
+                        );
+                        return;
+                      }
+
+                      // ✅ Normal end (no Super Over) → stay here (or refresh UI)
+                      await _hardRefresh();
+                      ScaffoldMessenger.of(context).showSnackBar(
+                        const SnackBar(content: Text('Match ended')),
+                      );
                     },
-                    onViewMatch: () {
+                   onViewMatch: () {
                       Navigator.of(context).push(
                         MaterialPageRoute(builder: (_) => FullMatchDetail(matchId: widget.matchId)),
                       );
@@ -2110,3 +2672,13 @@ class _GlassCard extends StatelessWidget {
     );
   }
 }
+
+// Put this at the top of the file (or anywhere outside classes)
+class YoutubeEditAction {
+  final String? url;
+  final bool isRemove;
+  const YoutubeEditAction._(this.url, this.isRemove);
+  const YoutubeEditAction.save(String newUrl) : this._(newUrl, false);
+  const YoutubeEditAction.remove() : this._(null, true);
+}
+

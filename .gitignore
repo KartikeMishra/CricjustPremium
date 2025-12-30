@@ -1,45 +1,100 @@
-# Miscellaneous
+###############################################################################
+# General / OS
+###############################################################################
 *.class
 *.log
 *.pyc
 *.swp
+*.tmp
+*.bak
+*.orig
 .DS_Store
-.atom/
-.build/
-.buildlog/
-.history
-.svn/
-.swiftpm/
-migrate_working_dir/
+Thumbs.db
+*.lock
 
-# IntelliJ related
+###############################################################################
+# IDEs
+###############################################################################
+.idea/
+.vscode/
+.atom/
 *.iml
 *.ipr
 *.iws
-.idea/
 
-# The .vscode folder contains launch configuration and tasks you configure in
-# VS Code which you may wish to be included in version control, so this line
-# is commented out by default.
-#.vscode/
-
-# Flutter/Dart/Pub related
-**/doc/api/
-**/ios/Flutter/.last_build_id
+###############################################################################
+# Dart / Flutter
+###############################################################################
 .dart_tool/
 .flutter-plugins
 .flutter-plugins-dependencies
-.pub-cache/
+.packages
 .pub/
-/build/
+.pub-cache/
+.build/
+.buildlog/
+coverage/
+build/
 
-# Symbolication related
-app.*.symbols
+# Generated API docs
+**/doc/api/
 
-# Obfuscation related
-app.*.map.json
+###############################################################################
+# Android
+###############################################################################
+android/.gradle/
+android/app/build/
+android/app/.cxx/
+android/app/.externalNativeBuild/
+android/local.properties
+android/key.properties
 
-# Android Studio will place build artifacts here
-/android/app/debug
-/android/app/profile
-/android/app/release
+# Android Studio build outputs
+android/app/debug/
+android/app/profile/
+android/app/release/
+
+###############################################################################
+# iOS
+###############################################################################
+ios/Pods/
+ios/.symlinks/
+ios/Flutter/Flutter.framework
+ios/Flutter/Flutter.podspec
+ios/Flutter/.last_build_id
+ios/Flutter/Generated.xcconfig
+
+###############################################################################
+# macOS
+###############################################################################
+macos/Pods/
+macos/Flutter/ephemeral/
+macos/Flutter/GeneratedPluginRegistrant.swift
+
+###############################################################################
+# Windows
+###############################################################################
+windows/flutter/ephemeral/
+
+###############################################################################
+# Linux
+###############################################################################
+linux/flutter/ephemeral/
+
+###############################################################################
+# Web
+###############################################################################
+web/.dart_tool/
+web/build/
+
+###############################################################################
+# Firebase / Secrets (optional safety)
+###############################################################################
+google-services.json
+GoogleService-Info.plist
+*.jks
+*.keystore
+
+###############################################################################
+# End of file
+###############################################################################

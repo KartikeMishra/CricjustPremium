@@ -9,12 +9,12 @@ class WicketTypeDialog {
       {'label': 'LBW', 'icon': Icons.highlight_off, 'allowRuns': false},
       {'label': 'Stumped', 'icon': Icons.block, 'allowRuns': false},
       {'label': 'Run Out', 'icon': Icons.directions_run, 'allowRuns': true},
-      {'label': 'Run Out (Mankaded)', 'icon': Icons.directions_walk, 'allowRuns': true},
+      {'label': 'Mankaded', 'icon': Icons.directions_walk, 'allowRuns': true},
       {'label': 'Retired Hurt', 'icon': Icons.healing, 'allowRuns': true},
       {'label': 'Caught & Bowled', 'icon': Icons.swap_horiz, 'allowRuns': false},
       {'label': 'Absent Hurt', 'icon': Icons.airline_seat_flat, 'allowRuns': true},
       {'label': 'Time out', 'icon': Icons.timer_off, 'allowRuns': false},
-      {'label': 'Hit Ball Twice', 'icon': Icons.replay_circle_filled_outlined, 'allowRuns': false},
+      {'label': 'Hit the ball twice', 'icon': Icons.replay_circle_filled_outlined, 'allowRuns': false},
     ];
 
     String? selectedType;

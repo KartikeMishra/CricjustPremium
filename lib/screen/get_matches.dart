@@ -9,6 +9,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 
 import '../service/session_manager.dart';
 import '../service/match_service.dart';
+import '../service/youtube_stream_service.dart';
 import '../theme/color.dart';
 import '../widget/toss_dialog.dart';
 import 'add_match_screen.dart';
@@ -693,6 +694,26 @@ class _GetMatchScreenState extends State<GetMatchScreen> {
                           }
                         },
                       ),
+
+
+                 /*   _actionIcon(
+                      icon: Icons.live_tv_rounded,
+                      color: Colors.redAccent,
+                      tooltip: 'YouTube Live Stream',
+                      onTap: matchId == null
+                          ? null
+                          : () async {
+                        await Navigator.push(
+                          context,
+                          MaterialPageRoute(
+                            builder: (_) => YouTubeStreamScreen(matchId: matchId),
+                          ),
+                        );
+                      },
+                    ),
+
+                  */
+
 
                     const Spacer(),
                     Icon(Icons.chevron_right,

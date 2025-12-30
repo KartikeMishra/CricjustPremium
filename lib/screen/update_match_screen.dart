@@ -7,6 +7,7 @@ import 'package:flutter/services.dart';
 import 'package:http/http.dart' as http;
 import 'package:intl/intl.dart';
 import 'package:shared_preferences/shared_preferences.dart';
+import '../model/tournament_model.dart';
 import '../service/player_service.dart';
 import '../service/team_service.dart';
 import '../service/tournament_service.dart';
@@ -308,29 +309,95 @@ class _UpdateMatchScreenState extends State<UpdateMatchScreen> {
       ),
     );
   }
+// -------------------------
+// Fetch tournaments (Frontend + Update match usage)
+// -------------------------
+  static Future<List<TournamentModel>> fetchTournaments({
+    String? apiToken,
+    String? type, // "recent", "live", or "upcoming"
+    int? limit,
+    int? skip,
+  }) async {
+    final Map<String, String> params = {};
+    if (type != null && type.isNotEmpty) params['type'] = type;
+    if (limit != null) params['limit'] = limit.toString();
+    if (skip != null) params['skip'] = skip.toString();
+
+    Uri uri;
+
+    // ✅ Use correct endpoint based on token presence
+    if (apiToken != null && apiToken.isNotEmpty) {
+      // User-specific tournaments (for logged-in users)
+      uri = Uri.parse('https://cricjust.in/wp-json/custom-api-for-cricket/get-tournament')
+          .replace(queryParameters: {
+        'api_logged_in_token': apiToken,
+        if (limit != null) 'limit': limit.toString(),
+        if (skip != null) 'skip': skip.toString(),
+      });
+    } else {
+      // Public frontend tournaments (recent/live/upcoming)
+      uri = Uri.parse('https://cricjust.in/wp-json/custom-api-for-cricket/get-tournaments')
+          .replace(queryParameters: params);
+    }
+
+    try {
+      final response = await http.get(uri);
+      if (response.statusCode != 200) {
+        throw Exception('HTTP ${response.statusCode}');
+      }
+
+      final body = json.decode(response.body);
+      if (body['status'] != 1) {
+        throw Exception(body['message'] ?? 'Failed to load tournaments');
+      }
+
+      final listJson = (body['data'] as List?) ?? [];
+      return listJson.map((e) => TournamentModel.fromJson(e)).toList();
+    } catch (e) {
+      throw Exception('Failed to fetch tournaments: $e');
+    }
+  }
 
   Future<void> _fetchTournaments() async {
-    final live = await TournamentService.fetchTournaments(
-      type: 'live',
-      limit: 20,
-      skip: 0,
-    );
-    final upcoming = await TournamentService.fetchTournaments(
-      type: 'upcoming',
-      limit: 20,
-      skip: 0,
-    );
-    setState(() {
-      _tournaments = [...live, ...upcoming]
-          .map(
-            (e) => {
-              'tournament_id': e.tournamentId,
-              'tournament_name': e.tournamentName,
-            },
-          )
-          .toList();
-    });
+    if (_apiToken == null || _apiToken!.isEmpty) return;
+
+    try {
+      // ✅ Fetch only user-created tournaments
+      final userTournaments = await TournamentService.fetchUserTournaments(
+        apiToken: _apiToken!,
+        limit: 20,
+        skip: 0,
+      );
+
+      setState(() {
+        _tournaments = userTournaments
+            .map((e) => {
+          'tournament_id': e.tournamentId,
+          'tournament_name': e.tournamentName,
+        })
+            .toList();
+      });
+    } catch (e) {
+      final err = e.toString().toLowerCase();
+
+      // ✅ Handle token/session expiration
+      if (err.contains('session expired') || err.contains('unauthorized')) {
+        final prefs = await SharedPreferences.getInstance();
+        await prefs.clear();
+
+        if (mounted) {
+          _showError('Session expired. Please login again.');
+          Navigator.pushReplacement(
+            context,
+            MaterialPageRoute(builder: (_) => const LoginScreen()),
+          );
+        }
+      } else {
+        _showError('Failed to load tournaments: $e');
+      }
+    }
   }
+
 
   Future<List<Map<String, dynamic>>> _fetchVenues({bool reset = true}) async {
     if (reset) {

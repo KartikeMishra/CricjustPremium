@@ -1,6 +1,6 @@
 // lib/screen/home_screen.dart
-// HomeScreen – always smooth: no toggle, no heavy blur, static (one-time) backdrop on Home,
-// and IndexedStack to keep tabs alive.
+// HomeScreen – premium & smooth: static backdrop on Home, IndexedStack to keep tabs alive,
+// modern gradient surfaces, soft shadows, and subtle animations — without heavy blur.
 
 import 'dart:convert';
 import 'package:another_flushbar/flushbar.dart';
@@ -21,6 +21,7 @@ import '../screen/profile_screen.dart';
 import '../service/session_manager.dart';
 import '../theme/color.dart';
 import '../theme/theme_provider.dart';
+import '../widget/app_header.dart';
 import 'add_match_screen.dart';
 import 'add_sponsor_screen.dart';
 import 'create_user_screen.dart';
@@ -29,16 +30,22 @@ import 'get_matches.dart';
 import 'get_team_screen.dart';
 import 'get_tournament.dart';
 import 'get_venue_screen.dart';
+import 'global_search_screen.dart';
+// import 'go_live_screen.dart';
+import 'go_live_screen.dart';
 import 'home_page_content.dart';
 import '../screen/global_stats_screen.dart';
 import 'my_matches_page.dart';
 import 'my_stats_page.dart';
 import 'my_teams_page.dart';
 
+
+
+
 class HomeScreen extends StatefulWidget {
   const HomeScreen({super.key});
   @override
-  _HomeScreenState createState() => _HomeScreenState();
+  State<HomeScreen> createState() => _HomeScreenState();
 }
 
 /// Small screen that shows a QR linking to the Play Store
@@ -56,7 +63,9 @@ class _AppLinkQrScreen extends StatelessWidget {
         decoration: isDark
             ? const BoxDecoration(
           color: Color(0xFF1E1E1E),
-          borderRadius: BorderRadius.vertical(bottom: Radius.circular(20)),
+          borderRadius: BorderRadius.vertical(
+            bottom: Radius.circular(20),
+          ),
         )
             : const BoxDecoration(
           gradient: LinearGradient(
@@ -64,7 +73,9 @@ class _AppLinkQrScreen extends StatelessWidget {
             begin: Alignment.topLeft,
             end: Alignment.bottomRight,
           ),
-          borderRadius: BorderRadius.vertical(bottom: Radius.circular(20)),
+          borderRadius: BorderRadius.vertical(
+            bottom: Radius.circular(20),
+          ),
         ),
         child: AppBar(
           backgroundColor: Colors.transparent,
@@ -106,7 +117,8 @@ class _AppLinkQrScreen extends StatelessWidget {
                   surfaceTintColor:
                   isDark ? const Color(0xFF1E1E1E) : Colors.white,
                   shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(16)),
+                    borderRadius: BorderRadius.circular(16),
+                  ),
                   child: const Padding(
                     padding: EdgeInsets.all(20),
                     child: Column(
@@ -221,6 +233,7 @@ class _HomeScreenState extends State<HomeScreen> {
       const TournamentScreen(),
       const AllPostsScreen(),
     ]);
+
     _loadUserInfo();
   }
 
@@ -235,7 +248,10 @@ class _HomeScreenState extends State<HomeScreen> {
     if (rolesLower.isEmpty) {
       final csv = (prefs.getString('roles_csv') ?? '').trim();
       if (csv.isNotEmpty &&
-          csv.split(',').map((e) => e.trim().toLowerCase()).contains('administrator')) {
+          csv
+              .split(',')
+              .map((e) => e.trim().toLowerCase())
+              .contains('administrator')) {
         return true;
       }
       final legacy = (prefs.getString('role') ??
@@ -255,6 +271,7 @@ class _HomeScreenState extends State<HomeScreen> {
     final token = prefs.getString('api_logged_in_token') ?? '';
     final adminFlag = _computeIsAdminFromPrefs(prefs);
 
+    if (!mounted) return;
     setState(() {
       _apiToken = token;
       _isLoggedIn = token.isNotEmpty;
@@ -266,6 +283,7 @@ class _HomeScreenState extends State<HomeScreen> {
         final resp = await http.get(Uri.parse(
           'https://cricjust.in/wp-json/custom-api-for-cricket/user-info?api_logged_in_token=$token',
         ));
+        if (!mounted) return;
         if (resp.statusCode == 200) {
           final jsonData = json.decode(resp.body);
           if (jsonData['status'] == 1) {
@@ -289,6 +307,7 @@ class _HomeScreenState extends State<HomeScreen> {
             await prefs.remove('userName');
             await prefs.remove('userEmail');
             await prefs.remove('profilePic');
+            if (!mounted) return;
             setState(() {
               _apiToken = null;
               _isLoggedIn = false;
@@ -304,11 +323,13 @@ class _HomeScreenState extends State<HomeScreen> {
       }
     }
 
+    if (!mounted) return;
     setState(() {
       _userName = prefs.getString('userName') ?? _userName;
       _userEmail = prefs.getString('userEmail') ?? _userEmail;
       _profilePicUrl = prefs.getString('profilePic') ?? _profilePicUrl;
-      _isLoggedIn = (prefs.getString('api_logged_in_token') ?? '').isNotEmpty;
+      _isLoggedIn =
+          (prefs.getString('api_logged_in_token') ?? '').isNotEmpty;
       _isAdmin = _computeIsAdminFromPrefs(prefs);
     });
   }
@@ -331,14 +352,21 @@ class _HomeScreenState extends State<HomeScreen> {
             children: [
               const SizedBox(height: 6),
               Container(
-                width: 40, height: 4,
+                width: 40,
+                height: 4,
                 decoration: BoxDecoration(
-                    color: Colors.black12, borderRadius: BorderRadius.circular(4)),
+                  color: Colors.black12,
+                  borderRadius: BorderRadius.circular(4),
+                ),
               ),
               ListTile(
                 leading: const Icon(Icons.ios_share),
                 title: const Text('Share app link'),
-                subtitle: Text(_playLink, maxLines: 1, overflow: TextOverflow.ellipsis),
+                subtitle: Text(
+                  _playLink,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                ),
                 onTap: () {
                   Navigator.pop(context);
                   Share.share(_shareText, subject: 'Cricjust App');
@@ -348,7 +376,9 @@ class _HomeScreenState extends State<HomeScreen> {
                 leading: const Icon(Icons.copy_rounded),
                 title: const Text('Copy link'),
                 onTap: () async {
-                  await Clipboard.setData(const ClipboardData(text: _playLink));
+                  await Clipboard.setData(
+                    const ClipboardData(text: _playLink),
+                  );
                   if (!mounted) return;
                   Navigator.pop(context);
                   ScaffoldMessenger.of(context).showSnackBar(
@@ -362,7 +392,9 @@ class _HomeScreenState extends State<HomeScreen> {
                 onTap: () {
                   Navigator.pop(context);
                   Navigator.of(context).push(
-                    MaterialPageRoute(builder: (_) => const _AppLinkQrScreen()),
+                    MaterialPageRoute(
+                      builder: (_) => const _AppLinkQrScreen(),
+                    ),
                   );
                 },
               ),
@@ -375,6 +407,9 @@ class _HomeScreenState extends State<HomeScreen> {
   }
 
   void _onItemTapped(int index) {
+    // Gentle haptic on tab switch
+    HapticFeedback.selectionClick();
+
     if (index == 4) {
       Flushbar(
         title: "Coming Soon",
@@ -395,7 +430,8 @@ class _HomeScreenState extends State<HomeScreen> {
     return isDark
         ? const BoxDecoration(
       color: Color(0xFF1E1E1E),
-      borderRadius: BorderRadius.vertical(bottom: Radius.circular(24)),
+      borderRadius:
+      BorderRadius.vertical(bottom: Radius.circular(24)),
     )
         : BoxDecoration(
       gradient: LinearGradient(
@@ -403,7 +439,8 @@ class _HomeScreenState extends State<HomeScreen> {
         begin: Alignment.topLeft,
         end: Alignment.bottomRight,
       ),
-      borderRadius: const BorderRadius.vertical(bottom: Radius.circular(24)),
+      borderRadius:
+      const BorderRadius.vertical(bottom: Radius.circular(24)),
       boxShadow: const [
         BoxShadow(
           color: Color(0x3D2196F3),
@@ -421,11 +458,20 @@ class _HomeScreenState extends State<HomeScreen> {
 
   Widget _sectionTitle(String text) => Padding(
     padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 10),
-    child: Text(text,
-        style: const TextStyle(color: Colors.white70, fontWeight: FontWeight.bold)),
+    child: Text(
+      text,
+      style: const TextStyle(
+        color: Colors.white70,
+        fontWeight: FontWeight.bold,
+      ),
+    ),
   );
 
-  Widget _buildDrawerItem(IconData icon, String label, {VoidCallback? onTap}) {
+  Widget _buildDrawerItem(
+      IconData icon,
+      String label, {
+        VoidCallback? onTap,
+      }) {
     return Padding(
       padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
       child: InkWell(
@@ -438,7 +484,9 @@ class _HomeScreenState extends State<HomeScreen> {
           decoration: BoxDecoration(
             color: _glassTileColor(context),
             borderRadius: BorderRadius.circular(14),
-            border: Border.all(color: Colors.white.withValues(alpha: 0.16)),
+            border: Border.all(
+              color: Colors.white.withValues(alpha: 0.16),
+            ),
           ),
           child: ListTile(
             leading: CircleAvatar(
@@ -446,10 +494,16 @@ class _HomeScreenState extends State<HomeScreen> {
               backgroundColor: Colors.white.withValues(alpha: 0.18),
               child: Icon(icon, size: 18, color: Colors.white),
             ),
-            title: Text(label,
-                style: const TextStyle(color: Colors.white, fontWeight: FontWeight.w600)),
+            title: Text(
+              label,
+              style: const TextStyle(
+                color: Colors.white,
+                fontWeight: FontWeight.w600,
+              ),
+            ),
             trailing: const Icon(Icons.chevron_right, color: Colors.white70),
-            contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 2),
+            contentPadding:
+            const EdgeInsets.symmetric(horizontal: 12, vertical: 2),
           ),
         ),
       ),
@@ -461,45 +515,70 @@ class _HomeScreenState extends State<HomeScreen> {
       icon,
       label,
       onTap: () {
-        Navigator.of(context, rootNavigator: true)
-            .push(MaterialPageRoute(builder: (_) => screen));
+        Navigator.of(context, rootNavigator: true).push(
+          MaterialPageRoute(builder: (_) => screen),
+        );
       },
     );
   }
 
   Widget _buildNavIcon(int index, IconData icon, String label) {
     final isSelected = _selectedIndex == index;
-    return SizedBox(
-      height: 32,
-      child: FittedBox(
-        fit: BoxFit.scaleDown,
-        alignment: Alignment.center,
-        child: InkWell(
-          borderRadius: BorderRadius.circular(12),
-          onTap: () => _onItemTapped(index),
-          child: Container(
-            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
-            decoration: BoxDecoration(
-              color: isSelected ? Colors.white.withValues(alpha: 0.14) : Colors.transparent,
-              borderRadius: BorderRadius.circular(12),
-              border: isSelected ? Border.all(color: Colors.white.withValues(alpha: 0.20)) : null,
-            ),
-            child: Row(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                Icon(icon, size: 30, color: Colors.white.withValues(alpha: isSelected ? 1 : 0.6)),
-                const SizedBox(width: 8),
-                Text(
-                  label,
-                  overflow: TextOverflow.ellipsis,
-                  style: TextStyle(
-                    fontSize: 20,
-                    height: 1.0,
-                    fontWeight: isSelected ? FontWeight.w700 : FontWeight.w500,
-                    color: Colors.white.withValues(alpha: isSelected ? 1 : 0.8),
+
+    return TweenAnimationBuilder<double>(
+      duration: const Duration(milliseconds: 180),
+      tween: Tween(begin: 1, end: isSelected ? 1.06 : 1),
+      curve: Curves.easeOut,
+      builder: (_, scale, child) => Transform.scale(
+        scale: scale,
+        child: child,
+      ),
+      child: SizedBox(
+        height: 32,
+        child: FittedBox(
+          fit: BoxFit.scaleDown,
+          alignment: Alignment.center,
+          child: InkWell(
+            borderRadius: BorderRadius.circular(12),
+            onTap: () => _onItemTapped(index),
+            child: Container(
+              padding:
+              const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+              decoration: BoxDecoration(
+                color: isSelected
+                    ? Colors.white.withValues(alpha: 0.14)
+                    : Colors.transparent,
+                borderRadius: BorderRadius.circular(12),
+                border: isSelected
+                    ? Border.all(
+                  color: Colors.white.withValues(alpha: 0.20),
+                )
+                    : null,
+              ),
+              child: Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Icon(
+                    icon,
+                    size: 30,
+                    color: Colors.white
+                        .withValues(alpha: isSelected ? 1 : 0.7),
                   ),
-                ),
-              ],
+                  const SizedBox(width: 8),
+                  Text(
+                    label,
+                    overflow: TextOverflow.ellipsis,
+                    style: TextStyle(
+                      fontSize: 20,
+                      height: 1.0,
+                      fontWeight:
+                      isSelected ? FontWeight.w700 : FontWeight.w500,
+                      color: Colors.white
+                          .withValues(alpha: isSelected ? 1 : 0.9),
+                    ),
+                  ),
+                ],
+              ),
             ),
           ),
         ),
@@ -509,8 +588,9 @@ class _HomeScreenState extends State<HomeScreen> {
 
   Future<bool> _ensureLoggedInWithPrompt() async {
     if (_isLoggedIn) return true;
-    await Navigator.of(context, rootNavigator: true)
-        .push(MaterialPageRoute(builder: (_) => const LoginScreen()));
+    await Navigator.of(context, rootNavigator: true).push(
+      MaterialPageRoute(builder: (_) => const LoginScreen()),
+    );
     if (!mounted) return false;
     await _loadUserInfo();
     return _isLoggedIn;
@@ -520,8 +600,12 @@ class _HomeScreenState extends State<HomeScreen> {
     if (!await _ensureLoggedInWithPrompt()) return null;
     final pid = await SessionManager.getPlayerId();
     if (pid == null || pid <= 0) {
+      if (!mounted) return null;
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text("Couldn't get your player id. Please log in again.")),
+        const SnackBar(
+          content:
+          Text("Couldn't get your player id. Please log in again."),
+        ),
       );
       return null;
     }
@@ -541,6 +625,7 @@ class _HomeScreenState extends State<HomeScreen> {
           if (_isLoggedIn) {
             final prefs = await SharedPreferences.getInstance();
             await prefs.clear();
+            if (!mounted) return;
             setState(() {
               _isLoggedIn = false;
               _apiToken = null;
@@ -556,8 +641,9 @@ class _HomeScreenState extends State<HomeScreen> {
             );
           } else {
             Navigator.of(context).pop();
-            await Navigator.of(context, rootNavigator: true)
-                .push(MaterialPageRoute(builder: (_) => const LoginScreen()));
+            await Navigator.of(context, rootNavigator: true).push(
+              MaterialPageRoute(builder: (_) => const LoginScreen()),
+            );
             if (mounted) await _loadUserInfo();
           }
         },
@@ -574,14 +660,20 @@ class _HomeScreenState extends State<HomeScreen> {
               ),
             ],
           ),
-          padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
+          padding:
+          const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
           child: Row(
             mainAxisAlignment: MainAxisAlignment.center,
             children: [
               Icon(icon, color: Colors.white),
               const SizedBox(width: 8),
-              Text(title,
-                  style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
+              Text(
+                title,
+                style: const TextStyle(
+                  color: Colors.white,
+                  fontWeight: FontWeight.bold,
+                ),
+              ),
             ],
           ),
         ),
@@ -589,7 +681,7 @@ class _HomeScreenState extends State<HomeScreen> {
     );
   }
 
-
+  // ---------- BUILD ----------
   @override
   Widget build(BuildContext context) {
     final isDark = Theme.of(context).brightness == Brightness.dark;
@@ -598,87 +690,93 @@ class _HomeScreenState extends State<HomeScreen> {
       backgroundColor: Theme.of(context).scaffoldBackgroundColor,
 
       // AppBar
-      appBar: PreferredSize(
-        preferredSize: const Size.fromHeight(64),
-        child: Container(
-          decoration: _barDecoration(context),
-          child: Stack(
-            children: [
-              AppBar(
-                backgroundColor: Colors.transparent,
-                elevation: 0,
-                centerTitle: true,
-                iconTheme: const IconThemeData(color: Colors.white),
-                title: AnimatedSwitcher(
-                  duration: const Duration(milliseconds: 150),
-                  child: Text(
-                    ['Home', 'Matches', 'Tournaments', 'News', 'Booking'][_selectedIndex],
-                    key: ValueKey(_selectedIndex),
-                    style: const TextStyle(color: Colors.white, fontWeight: FontWeight.w800),
+      appBar: AppHeader(
+        title: const ['Home', 'Matches', 'Tournaments', 'News', 'Booking']
+            .elementAt(0 + (_selectedIndex.clamp(0, 4))),
+        actions: [
+          IconButton(
+            icon: const Icon(Icons.search),
+            tooltip: 'Search',
+            onPressed: () => Navigator.push(
+              context,
+              MaterialPageRoute(builder: (_) => const GlobalSearchScreen()),
+            ),
+          ),
+          GestureDetector(
+            onTap: () async {
+              if (!_isLoggedIn) {
+                await Navigator.of(context, rootNavigator: true).push(
+                  MaterialPageRoute(builder: (_) => const LoginScreen()),
+                );
+                if (mounted) await _loadUserInfo();
+              } else {
+                final changed = await Navigator.of(context,
+                    rootNavigator: true)
+                    .push(
+                  MaterialPageRoute(
+                    builder: (_) =>
+                        ProfileScreen(apiToken: _apiToken ?? ''),
                   ),
+                );
+                if (changed == true && mounted) {
+                  await _loadUserInfo();
+                }
+              }
+            },
+            child: Padding(
+              padding: const EdgeInsets.only(right: 14),
+              child: Container(
+                padding: const EdgeInsets.all(2),
+                decoration: BoxDecoration(
+                  shape: BoxShape.circle,
+                  gradient: LinearGradient(
+                    colors: [
+                      AppColors.primary.withValues(alpha: 0.95),
+                      _barEnd.withValues(alpha: 0.7),
+                    ],
+                    begin: Alignment.topLeft,
+                    end: Alignment.bottomRight,
+                  ),
+                  boxShadow: const [
+                    BoxShadow(
+                      color: Color(0x3D2196F3),
+                      blurRadius: 10,
+                      offset: Offset(0, 4),
+                    ),
+                  ],
                 ),
-                actions: [
-                  // Profile
-                  GestureDetector(
-                    onTap: () async {
-                      if (!_isLoggedIn) {
-                        await Navigator.of(context, rootNavigator: true)
-                            .push(MaterialPageRoute(builder: (_) => const LoginScreen()));
-                        if (mounted) await _loadUserInfo();
-                      } else {
-                        final changed =
-                        await Navigator.of(context, rootNavigator: true).push(
-                          MaterialPageRoute(
-                            builder: (_) => ProfileScreen(apiToken: _apiToken ?? ''),
-                          ),
-                        );
-                        if (changed == true && mounted) {
-                          await _loadUserInfo();
-                        }
-                      }
-                    },
-                    child: Padding(
-                      padding: const EdgeInsets.only(right: 14),
-                      child: Container(
-                        padding: const EdgeInsets.all(2),
-                        decoration: BoxDecoration(
-                          shape: BoxShape.circle,
-                          gradient: LinearGradient(
-                            colors: [AppColors.primary.withValues(alpha: 0.95), _barEnd.withValues(alpha: 0.7)],
-                            begin: Alignment.topLeft,
-                            end: Alignment.bottomRight,
-                          ),
-                          boxShadow: const [
-                            BoxShadow(color: Color(0x3D2196F3), blurRadius: 10, offset: Offset(0, 4)),
-                          ],
+                child: Hero(
+                  tag: 'profile-$_userEmail',
+                  child: CircleAvatar(
+                    radius: 17,
+                    backgroundColor: Colors.white,
+                    child: ClipOval(
+                      child: (_profilePicUrl != null &&
+                          _profilePicUrl!.isNotEmpty)
+                          ? Image.network(
+                        _profilePicUrl!,
+                        width: 34,
+                        height: 34,
+                        fit: BoxFit.cover,
+                        cacheWidth: 96,
+                        cacheHeight: 96,
+                        errorBuilder: (_, __, ___) => const Icon(
+                          Icons.person,
+                          color: AppColors.primary,
                         ),
-                        child: Hero(
-                          tag: 'profile-$_userEmail',
-                          child: CircleAvatar(
-                            radius: 17,
-                            backgroundColor: Colors.white,
-                            child: ClipOval(
-                              child: (_profilePicUrl != null && _profilePicUrl!.isNotEmpty)
-                                  ? Image.network(
-                                _profilePicUrl!,
-                                width: 34, height: 34, fit: BoxFit.cover,
-                                cacheWidth: 96, cacheHeight: 96,
-                              )
-                                  : const Icon(Icons.person, color: AppColors.primary),
-                            ),
-                          ),
-                        ),
-                      ),
+                      )
+                          : const Icon(Icons.person,
+                          color: AppColors.primary),
                     ),
                   ),
-                ],
+                ),
               ),
-            ],
+            ),
           ),
-        ),
+        ],
       ),
 
-      // Drawer (no BackdropFilter)
+      // Drawer
       drawer: ClipRRect(
         borderRadius: const BorderRadius.only(
           topRight: Radius.circular(24),
@@ -691,7 +789,10 @@ class _HomeScreenState extends State<HomeScreen> {
                 ? const BoxDecoration(color: Color(0xFF1E1E1E))
                 : BoxDecoration(
               gradient: LinearGradient(
-                colors: [AppColors.primary.withValues(alpha: 0.88), const Color(0xFF42A5F5).withValues(alpha: 0.88)],
+                colors: [
+                  AppColors.primary.withValues(alpha: 0.88),
+                  const Color(0xFF42A5F5).withValues(alpha: 0.88)
+                ],
                 begin: Alignment.topLeft,
                 end: Alignment.bottomRight,
               ),
@@ -705,6 +806,7 @@ class _HomeScreenState extends State<HomeScreen> {
                 physics: const BouncingScrollPhysics(),
                 children: [
                   const SizedBox(height: 36),
+
                   // Header
                   Center(
                     child: Container(
@@ -712,7 +814,10 @@ class _HomeScreenState extends State<HomeScreen> {
                       decoration: BoxDecoration(
                         shape: BoxShape.circle,
                         gradient: LinearGradient(
-                          colors: [AppColors.primary.withValues(alpha: 0.9), const Color(0xFF42A5F5).withValues(alpha: 0.5)],
+                          colors: [
+                            AppColors.primary.withValues(alpha: 0.9),
+                            const Color(0xFF42A5F5).withValues(alpha: 0.5)
+                          ],
                           begin: Alignment.topLeft,
                           end: Alignment.bottomRight,
                         ),
@@ -721,13 +826,26 @@ class _HomeScreenState extends State<HomeScreen> {
                         radius: 40,
                         backgroundColor: Colors.white,
                         child: ClipOval(
-                          child: (_profilePicUrl != null && _profilePicUrl!.isNotEmpty)
+                          child: (_profilePicUrl != null &&
+                              _profilePicUrl!.isNotEmpty)
                               ? Image.network(
                             _profilePicUrl!,
-                            width: 80, height: 80, fit: BoxFit.cover,
-                            cacheWidth: 160, cacheHeight: 160,
+                            width: 80,
+                            height: 80,
+                            fit: BoxFit.cover,
+                            cacheWidth: 160,
+                            cacheHeight: 160,
+                            errorBuilder: (_, __, ___) => const Icon(
+                              Icons.person,
+                              color: AppColors.primary,
+                              size: 40,
+                            ),
                           )
-                              : const Icon(Icons.person, color: AppColors.primary, size: 40),
+                              : const Icon(
+                            Icons.person,
+                            color: AppColors.primary,
+                            size: 40,
+                          ),
                         ),
                       ),
                     ),
@@ -736,16 +854,66 @@ class _HomeScreenState extends State<HomeScreen> {
                   Center(
                     child: Text(
                       _userName.isEmpty ? 'Guest' : _userName,
-                      style: const TextStyle(color: Colors.white, fontSize: 18, fontWeight: FontWeight.bold),
+                      style: const TextStyle(
+                        color: Colors.white,
+                        fontSize: 18,
+                        fontWeight: FontWeight.bold,
+                      ),
                     ),
                   ),
                   Center(
                     child: Text(
                       _userEmail.isEmpty ? 'Not logged in' : _userEmail,
-                      style: const TextStyle(color: Colors.white70, fontSize: 13),
+                      style: const TextStyle(
+                        color: Colors.white70,
+                        fontSize: 13,
+                      ),
                     ),
                   ),
                   const Divider(color: Colors.white38, height: 30),
+
+                  // Theme toggle
+                  Padding(
+                    padding: const EdgeInsets.symmetric(
+                        horizontal: 10, vertical: 6),
+                    child: Container(
+                      decoration: BoxDecoration(
+                        color: _glassTileColor(context),
+                        borderRadius: BorderRadius.circular(14),
+                        border: Border.all(
+                          color: Colors.white.withOpacity(0.16),
+                        ),
+                      ),
+                      child: Builder(
+                        builder: (context) {
+                          final isDark =
+                              Theme.of(context).brightness == Brightness.dark;
+                          return SwitchListTile(
+                            secondary: CircleAvatar(
+                              radius: 16,
+                              backgroundColor:
+                              Colors.white.withOpacity(0.18),
+                              child: const Icon(
+                                Icons.brightness_6_rounded,
+                                size: 18,
+                                color: Colors.white,
+                              ),
+                            ),
+                            title: const Text(
+                              'Dark Mode',
+                              style: TextStyle(
+                                color: Colors.white,
+                                fontWeight: FontWeight.w600,
+                              ),
+                            ),
+                            value: isDark,
+                            onChanged: (val) =>
+                                context.read<ThemeProvider>().toggleTheme(val),
+                          );
+                        },
+                      ),
+                    ),
+                  ),
 
                   // ===== My Actions =====
                   _sectionTitle("My Actions"),
@@ -755,7 +923,8 @@ class _HomeScreenState extends State<HomeScreen> {
                     onTap: () async {
                       if (!await _ensureLoggedInWithPrompt()) return;
                       Navigator.of(context, rootNavigator: true).push(
-                        MaterialPageRoute(builder: (_) => const MatchUIScreen()),
+                        MaterialPageRoute(
+                            builder: (_) => const MatchUIScreen()),
                       );
                     },
                   ),
@@ -769,19 +938,51 @@ class _HomeScreenState extends State<HomeScreen> {
                       fallbackTitle: 'Cricjust — FAQ',
                     ),
                   ),
-                  _buildDrawerItem(Icons.share, 'Share App', onTap: _showShareOptions),
-                  _buildDrawerItem(Icons.people, 'Find People'),
+                  _buildDrawerItem(
+                    Icons.share,
+                    'Share App',
+                    onTap: _showShareOptions,
+                  ),
+                  _buildDrawerItem(
+                    Icons.people,
+                    'Find',
+                    onTap: () {
+                      Navigator.of(context, rootNavigator: true).push(
+                        MaterialPageRoute(
+                            builder: (_) => const GlobalSearchScreen()),
+                      );
+                    },
+                  ),
+              /*    _buildDrawerItem(
+                    Icons.videocam_rounded,
+                     'Go Live (YouTube)',
+                     onTap: () {
+                       Navigator.of(context, rootNavigator: true).push(
+                         MaterialPageRoute(builder: (_) => const GoLivePage()),
+                       );
+                     },
+                   ),
+*/
+
+
 
                   // ===== General =====
                   _sectionTitle("General"),
-                  _buildDrawerNavItem(Icons.bar_chart_outlined, 'Global Stats', const GlobalStatsScreen()),
+                  _buildDrawerNavItem(
+                      Icons.bar_chart_outlined,
+                      'Global Stats',
+                      const GlobalStatsScreen()),
                   _buildDrawerItem(
                     Icons.person,
                     'My Profile',
                     onTap: () async {
                       if (!await _ensureLoggedInWithPrompt()) return;
-                      final changed = await Navigator.of(context, rootNavigator: true).push(
-                        MaterialPageRoute(builder: (_) => ProfileScreen(apiToken: _apiToken ?? '')),
+                      final changed =
+                      await Navigator.of(context, rootNavigator: true)
+                          .push(
+                        MaterialPageRoute(
+                            builder: (_) =>
+                                ProfileScreen(apiToken: _apiToken ?? '')),
                       );
                       if (changed == true && mounted) await _loadUserInfo();
                     },
@@ -792,7 +993,8 @@ class _HomeScreenState extends State<HomeScreen> {
                     onTap: () async {
                       if (!await _ensureLoggedInWithPrompt()) return;
                       Navigator.of(context, rootNavigator: true).push(
-                        MaterialPageRoute(builder: (_) => const MyMatchesPage()),
+                        MaterialPageRoute(
+                            builder: (_) => const MyMatchesPage()),
                       );
                     },
                   ),
@@ -803,7 +1005,8 @@ class _HomeScreenState extends State<HomeScreen> {
                       final pid = await _ensurePlayerId();
                       if (pid == null) return;
                       Navigator.of(context, rootNavigator: true).push(
-                        MaterialPageRoute(builder: (_) => MyTeamsPage(playerId: pid)),
+                        MaterialPageRoute(
+                            builder: (_) => MyTeamsPage(playerId: pid)),
                       );
                     },
                   ),
@@ -814,7 +1017,8 @@ class _HomeScreenState extends State<HomeScreen> {
                       final pid = await _ensurePlayerId();
                       if (pid == null) return;
                       Navigator.of(context, rootNavigator: true).push(
-                        MaterialPageRoute(builder: (_) => MyStatsPage(playerId: pid)),
+                        MaterialPageRoute(
+                            builder: (_) => MyStatsPage(playerId: pid)),
                       );
                     },
                   ),
@@ -825,14 +1029,20 @@ class _HomeScreenState extends State<HomeScreen> {
                       final phone = await SessionManager.getPhone() ?? '';
                       final name = await SessionManager.getUserName();
                       if (phone.isEmpty) {
+                        if (!mounted) return;
                         ScaffoldMessenger.of(context).showSnackBar(
-                          const SnackBar(content: Text('Add your phone in Profile first')),
+                          const SnackBar(
+                              content:
+                              Text('Add your phone in Profile first')),
                         );
                         return;
                       }
+                      if (!mounted) return;
                       Navigator.push(
                         context,
-                        MaterialPageRoute(builder: (_) => ReceiverQrScreen(phone: phone, name: name)),
+                        MaterialPageRoute(
+                            builder: (_) =>
+                                ReceiverQrScreen(phone: phone, name: name)),
                       );
                     },
                   ),
@@ -845,13 +1055,17 @@ class _HomeScreenState extends State<HomeScreen> {
                       if (!await _ensureLoggedInWithPrompt()) return;
                       final token = await SessionManager.getToken();
                       if (token == null || token.trim().isEmpty) {
+                        if (!mounted) return;
                         ScaffoldMessenger.of(context).showSnackBar(
-                          const SnackBar(content: Text('Please log in to continue')),
+                          const SnackBar(
+                              content: Text('Please log in to continue')),
                         );
                         return;
                       }
+                      if (!mounted) return;
                       Navigator.of(context, rootNavigator: true).push(
-                        MaterialPageRoute(builder: (_) => CreateUserScreen(apiToken: token)),
+                        MaterialPageRoute(
+                            builder: (_) => CreateUserScreen(apiToken: token)),
                       );
                     },
                   ),
@@ -863,13 +1077,17 @@ class _HomeScreenState extends State<HomeScreen> {
                       onTap: () async {
                         if (!await _ensureLoggedInWithPrompt()) return;
                         if (!_isAdmin) {
+                          if (!mounted) return;
                           ScaffoldMessenger.of(context).showSnackBar(
-                            const SnackBar(content: Text('Only admins can access this')),
+                            const SnackBar(
+                                content:
+                                Text('Only admins can access this')),
                           );
                           return;
                         }
                         Navigator.of(context, rootNavigator: true).push(
-                          MaterialPageRoute(builder: (_) => const AddSponsorScreen()),
+                          MaterialPageRoute(
+                              builder: (_) => const AddSponsorScreen()),
                         );
                       },
                     ),
@@ -880,7 +1098,8 @@ class _HomeScreenState extends State<HomeScreen> {
                     onTap: () async {
                       if (!await _ensureLoggedInWithPrompt()) return;
                       Navigator.of(context, rootNavigator: true).push(
-                        MaterialPageRoute(builder: (_) => const GetVenueScreen()),
+                        MaterialPageRoute(
+                            builder: (_) => const GetVenueScreen()),
                       );
                     },
                   ),
@@ -890,7 +1109,8 @@ class _HomeScreenState extends State<HomeScreen> {
                     onTap: () async {
                       if (!await _ensureLoggedInWithPrompt()) return;
                       Navigator.of(context, rootNavigator: true).push(
-                        MaterialPageRoute(builder: (_) => const TournamentListScreen()),
+                        MaterialPageRoute(
+                            builder: (_) => const TournamentListScreen()),
                       );
                     },
                   ),
@@ -900,7 +1120,8 @@ class _HomeScreenState extends State<HomeScreen> {
                     onTap: () async {
                       if (!await _ensureLoggedInWithPrompt()) return;
                       Navigator.of(context, rootNavigator: true).push(
-                        MaterialPageRoute(builder: (_) => const GetTeamScreen()),
+                        MaterialPageRoute(
+                            builder: (_) => const GetTeamScreen()),
                       );
                     },
                   ),
@@ -910,7 +1131,8 @@ class _HomeScreenState extends State<HomeScreen> {
                     onTap: () async {
                       if (!await _ensureLoggedInWithPrompt()) return;
                       Navigator.of(context, rootNavigator: true).push(
-                        MaterialPageRoute(builder: (_) => const GetMatchScreen()),
+                        MaterialPageRoute(
+                            builder: (_) => const GetMatchScreen()),
                       );
                     },
                   ),
@@ -929,8 +1151,9 @@ class _HomeScreenState extends State<HomeScreen> {
       // Start Match FAB
       floatingActionButton: _selectedIndex == 0
           ? GestureDetector(
-        onTap: () => Navigator.of(context, rootNavigator: true)
-            .push(MaterialPageRoute(builder: (_) => const MatchUIScreen())),
+        onTap: () => Navigator.of(context, rootNavigator: true).push(
+          MaterialPageRoute(builder: (_) => const MatchUIScreen()),
+        ),
         child: AnimatedContainer(
           duration: const Duration(milliseconds: 150),
           decoration: BoxDecoration(
@@ -942,20 +1165,27 @@ class _HomeScreenState extends State<HomeScreen> {
             borderRadius: BorderRadius.circular(16),
             boxShadow: [
               BoxShadow(
-                color: const Color(0xFF42A5F5).withValues(alpha: 0.35),
+                color: const Color(0xFF42A5F5)
+                    .withValues(alpha: 0.35),
                 blurRadius: 14,
                 offset: const Offset(0, 6),
               ),
             ],
           ),
-          padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
+          padding: const EdgeInsets.symmetric(
+              horizontal: 20, vertical: 12),
           child: const Row(
             mainAxisSize: MainAxisSize.min,
             children: [
               Icon(Icons.sports_cricket, color: Colors.white),
               SizedBox(width: 8),
-              Text("Start Match",
-                  style: TextStyle(color: Colors.white, fontWeight: FontWeight.w700)),
+              Text(
+                "Start Match",
+                style: TextStyle(
+                  color: Colors.white,
+                  fontWeight: FontWeight.w700,
+                ),
+              ),
             ],
           ),
         ),
@@ -967,10 +1197,13 @@ class _HomeScreenState extends State<HomeScreen> {
       body: Stack(
         children: [
           if (_selectedIndex == 0)
-            const Positioned.fill(child: SubtleBackdrop()), // paint-once, zero animation
+            const Positioned.fill(
+              child: SubtleBackdrop(),
+            ),
           PageStorage(
             bucket: _bucket,
-            child: IndexedStack(index: _selectedIndex, children: _pages),
+            child:
+            IndexedStack(index: _selectedIndex, children: _pages),
           ),
         ],
       ),
@@ -980,7 +1213,10 @@ class _HomeScreenState extends State<HomeScreen> {
         decoration: isDark
             ? const BoxDecoration(
           color: Color(0xFF1E1E1E),
-          borderRadius: BorderRadius.only(topLeft: Radius.circular(20), topRight: Radius.circular(20)),
+          borderRadius: BorderRadius.only(
+            topLeft: Radius.circular(20),
+            topRight: Radius.circular(20),
+          ),
         )
             : BoxDecoration(
           gradient: LinearGradient(
@@ -988,9 +1224,17 @@ class _HomeScreenState extends State<HomeScreen> {
             begin: Alignment.topLeft,
             end: Alignment.bottomRight,
           ),
-          borderRadius: const BorderRadius.only(topLeft: Radius.circular(20), topRight: Radius.circular(20)),
+          borderRadius: const BorderRadius.only(
+            topLeft: Radius.circular(20),
+            topRight: Radius.circular(20),
+          ),
           boxShadow: [
-            BoxShadow(color: const Color(0xFF42A5F5).withValues(alpha: 0.45), blurRadius: 20, offset: Offset(0, -6)),
+            BoxShadow(
+              color: const Color(0xFF42A5F5)
+                  .withValues(alpha: 0.45),
+              blurRadius: 20,
+              offset: const Offset(0, -6),
+            ),
           ],
         ),
         child: BottomAppBar(
@@ -1001,12 +1245,26 @@ class _HomeScreenState extends State<HomeScreen> {
             minimum: const EdgeInsets.only(bottom: 6),
             child: SizedBox(
               height: 56,
-              child: Row(children: [
-                Expanded(child: Center(child: _buildNavIcon(0, Icons.home_rounded, 'Home'))),
-                Expanded(child: Center(child: _buildNavIcon(1, Icons.sports_cricket_rounded, 'Matches'))),
-                Expanded(child: Center(child: _buildNavIcon(2, Icons.emoji_events_rounded, 'Tournaments'))),
-                Expanded(child: Center(child: _buildNavIcon(3, Icons.article_rounded, 'News'))),
-              ]),
+              child: Row(
+                children: [
+                  Expanded(
+                      child: Center(
+                          child: _buildNavIcon(
+                              0, Icons.home_rounded, 'Home'))),
+                  Expanded(
+                      child: Center(
+                          child: _buildNavIcon(1,
+                              Icons.sports_cricket_rounded, 'Matches'))),
+                  Expanded(
+                      child: Center(
+                          child: _buildNavIcon(2,
+                              Icons.emoji_events_rounded, 'Tournaments'))),
+                  Expanded(
+                      child: Center(
+                          child: _buildNavIcon(
+                              3, Icons.article_rounded, 'News'))),
+                ],
+              ),
             ),
           ),
         ),
@@ -1040,24 +1298,30 @@ class _StaticBackdrop extends CustomPainter {
     canvas.drawRect(Offset.zero & size, Paint()..color = bg);
 
     // Soft, static blobs (no blur, no saveLayer)
-    void blob(Color c, double cx, double cy, double r, double opacity) {
-      final rect = Rect.fromCircle(center: Offset(cx, cy), radius: r);
+    void blob(
+        Color c, double cx, double cy, double r, double opacity) {
+      final rect =
+      Rect.fromCircle(center: Offset(cx, cy), radius: r);
       final grad = RadialGradient(
         colors: [c.withOpacity(opacity), Colors.transparent],
         stops: const [0.0, 1.0],
       );
-      canvas.drawRect(rect.inflate(r), Paint()..shader = grad.createShader(rect));
+      canvas.drawRect(
+        rect.inflate(r),
+        Paint()..shader = grad.createShader(rect),
+      );
     }
 
     final primary = AppColors.primary;
     const secondary = Color(0xFF42A5F5);
 
     final maxDim = w > h ? w : h;
-    blob(primary,   w * 0.18, h * 0.22, maxDim * 0.45, isDark ? 0.20 : 0.16);
+    blob(primary, w * 0.18, h * 0.22, maxDim * 0.45, isDark ? 0.20 : 0.16);
     blob(secondary, w * 0.84, h * 0.30, maxDim * 0.42, isDark ? 0.18 : 0.14);
-    blob(primary,   w * 0.52, h * 0.82, maxDim * 0.38, isDark ? 0.18 : 0.14);
+    blob(primary, w * 0.52, h * 0.82, maxDim * 0.38, isDark ? 0.18 : 0.14);
   }
 
   @override
-  bool shouldRepaint(covariant _StaticBackdrop old) => old.isDark != isDark;
+  bool shouldRepaint(covariant _StaticBackdrop old) =>
+      old.isDark != isDark;
 }

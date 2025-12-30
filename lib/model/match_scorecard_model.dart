@@ -1,3 +1,5 @@
+// lib/model/match_scorecard_model.dart
+
 class MatchScorecardResponse {
   final List<InningScorecard> scorecard;
   final List<dynamic> data;
@@ -11,11 +13,11 @@ class MatchScorecardResponse {
 
   factory MatchScorecardResponse.fromJson(Map<String, dynamic> json) {
     return MatchScorecardResponse(
-      scorecard: (json['scorecard'] as List)
-          .map((e) => InningScorecard.fromJson(e))
-          .toList(),
+      scorecard: (json['scorecard'] as List? ?? const [])
+          .map((e) => InningScorecard.fromJson(e as Map<String, dynamic>))
+          .toList(growable: false),
       data: json['data'] ?? [],
-      matchResult: json['match_result'] ?? '',
+      matchResult: (json['match_result'] ?? '').toString(),
     );
   }
 }
@@ -28,8 +30,8 @@ class InningScorecard {
 
   factory InningScorecard.fromJson(Map<String, dynamic> json) {
     return InningScorecard(
-      team1: TeamScore.fromJson(json['team_1']),
-      team2: TeamScore.fromJson(json['team_2']),
+      team1: TeamScore.fromJson(json['team_1'] as Map<String, dynamic>),
+      team2: TeamScore.fromJson(json['team_2'] as Map<String, dynamic>),
     );
   }
 }
@@ -59,15 +61,16 @@ class TeamScore {
 
   factory TeamScore.fromJson(Map<String, dynamic> json) {
     return TeamScore(
-      teamId: json['team_id'],
-      teamName: json['team_name'] ?? '',
-      teamLogo: json['team_logo'],
-      totalRuns: json['total_runs'],
-      totalWickets: json['total_wickets'],
-      extras: json['extras'] ?? '',
-      oversDone: (json['overs_done'] as num).toDouble(),
-      ballsDone: json['balls_done'],
-      details: TeamDetails.fromJson(json['scorecard']),
+      teamId: _asInt(json['team_id']),
+      teamName: (json['team_name'] ?? '').toString(),
+      teamLogo: json['team_logo']?.toString(),
+      totalRuns: _asInt(json['total_runs']),
+      totalWickets: _asInt(json['total_wickets']),
+      extras: (json['extras'] ?? '').toString(),
+      oversDone: _asDouble(json['overs_done']),
+      ballsDone: _asInt(json['balls_done']),
+      // players/bowlers live under "scorecard"
+      details: TeamDetails.fromJson((json['scorecard'] ?? const {}) as Map<String, dynamic>),
     );
   }
 }
@@ -84,17 +87,33 @@ class TeamDetails {
   });
 
   factory TeamDetails.fromJson(Map<String, dynamic> json) {
-    return TeamDetails(
-      players: (json['players'] as List)
-          .map((e) => PlayerScore.fromJson(e))
-          .toList(),
-      yetToBat: (json['yet_to_players'] as List)
-          .map((e) => YetToBat.fromJson(e))
-          .toList(),
-      bowlers: (json['bowlers'] as List)
-          .map((e) => BowlerStats.fromJson(e))
-          .toList(),
-    );
+    final rawPlayers = (json['players'] as List? ?? const []);
+    final rawYetToBat = (json['yet_to_players'] as List? ?? const []);
+    final rawBowlers = (json['bowlers'] as List? ?? const []);
+
+    // Stamp original index from API list
+    final players = rawPlayers
+        .asMap()
+        .entries
+        .map((e) => PlayerScore.fromJson(e.value as Map<String, dynamic>)
+        .copyWith(orderIndex: e.key))
+        .toList(growable: false);
+
+    final yetToBat = rawYetToBat
+        .asMap()
+        .entries
+        .map((e) => YetToBat.fromJson(e.value as Map<String, dynamic>)
+        .copyWith(orderIndex: e.key))
+        .toList(growable: false);
+
+    final bowlers = rawBowlers
+        .asMap()
+        .entries
+        .map((e) => BowlerStats.fromJson(e.value as Map<String, dynamic>)
+        .copyWith(orderIndex: e.key))
+        .toList(growable: false);
+
+    return TeamDetails(players: players, yetToBat: yetToBat, bowlers: bowlers);
   }
 }
 
@@ -110,6 +129,8 @@ class PlayerScore {
   final bool isOut;
   final String outBy;
 
+  final int? orderIndex; // original index from API array
+
   PlayerScore({
     required this.userId,
     required this.name,
@@ -121,37 +142,63 @@ class PlayerScore {
     required this.strikeRate,
     required this.isOut,
     required this.outBy,
+    this.orderIndex,
   });
 
   int get playerId => userId;
 
   factory PlayerScore.fromJson(Map<String, dynamic> json) {
     return PlayerScore(
-      userId: json['user_id'],
-      name: json['name'],
-      order: json['order'],
-      runs: json['r'],
-      balls: json['b'],
-      fours: json['4s'],
-      sixes: json['6s'],
-      strikeRate: (json['sr'] as num).toDouble(),
-      isOut: json['is_out'] == 1,
-      outBy: json['out_by'],
+      userId: _asInt(json['user_id']),
+      name: (json['name'] ?? '').toString(),
+      order: (json['order'] ?? '').toString(),
+      runs: _asInt(json['r']),
+      balls: _asInt(json['b']),
+      fours: _asInt(json['4s']),
+      sixes: _asInt(json['6s']),
+      strikeRate: _asDouble(json['sr'] ?? json['strike_rate']),
+      isOut: _asInt(json['is_out']) == 1,
+      outBy: (json['out_by'] ?? '').toString(),
     );
   }
+
+  PlayerScore copyWith({int? orderIndex}) => PlayerScore(
+    userId: userId,
+    name: name,
+    order: order,
+    runs: runs,
+    balls: balls,
+    fours: fours,
+    sixes: sixes,
+    strikeRate: strikeRate,
+    isOut: isOut,
+    outBy: outBy,
+    orderIndex: orderIndex ?? this.orderIndex,
+  );
 }
 
 class YetToBat {
   final int userId;
   final String name;
+  final int? orderIndex;
 
-  YetToBat({required this.userId, required this.name});
+  YetToBat({
+    required this.userId,
+    required this.name,
+    this.orderIndex,
+  });
 
   int get playerId => userId;
 
   factory YetToBat.fromJson(Map<String, dynamic> json) {
-    return YetToBat(userId: json['user_id'], name: json['name']);
+    return YetToBat(
+      userId: _asInt(json['user_id']),
+      name: (json['name'] ?? '').toString(),
+    );
   }
+
+  YetToBat copyWith({int? orderIndex}) =>
+      YetToBat(userId: userId, name: name, orderIndex: orderIndex ?? this.orderIndex);
 }
 
 class BowlerStats {
@@ -163,6 +210,7 @@ class BowlerStats {
   final int runs;
   final int wickets;
   final double economy;
+  final int? orderIndex;
 
   BowlerStats({
     required this.bowlerId,
@@ -173,20 +221,56 @@ class BowlerStats {
     required this.runs,
     required this.wickets,
     required this.economy,
+    this.orderIndex,
   });
 
   int get playerId => int.tryParse(bowlerId) ?? 0;
 
   factory BowlerStats.fromJson(Map<String, dynamic> json) {
     return BowlerStats(
-      bowlerId: json['bowler_id'].toString(),
-      name: json['name'],
-      overs: (json['overs'] as num).toDouble(),
-      balls: json['balls'],
-      maiden: json['maiden'],
-      runs: int.tryParse(json['runs'].toString()) ?? 0,
-      wickets: int.tryParse(json['wickets'].toString()) ?? 0,
-      economy: double.tryParse(json['economy'].toString()) ?? 0.0,
+      bowlerId: (json['bowler_id'] ?? '').toString(),
+      name: (json['name'] ?? '').toString(),
+      overs: _asDouble(json['overs']),
+      balls: _asInt(json['balls']),
+      maiden: _asInt(json['maiden']),
+      runs: _asInt(json['runs']),
+      wickets: _asInt(json['wickets']),
+      economy: _asDouble(json['economy'] ?? json['econ']),
     );
   }
+
+  BowlerStats copyWith({int? orderIndex}) => BowlerStats(
+    bowlerId: bowlerId,
+    name: name,
+    overs: overs,
+    balls: balls,
+    maiden: maiden,
+    runs: runs,
+    wickets: wickets,
+    economy: economy,
+    orderIndex: orderIndex ?? this.orderIndex,
+  );
+}
+
+/// --------------------
+/// Safe parsing helpers
+/// --------------------
+int _asInt(dynamic v) {
+  if (v is int) return v;
+  if (v is num) return v.toInt();
+  if (v is String) {
+    final x = int.tryParse(v.trim());
+    if (x != null) return x;
+    final d = double.tryParse(v.trim());
+    if (d != null) return d.toInt();
+  }
+  return 0;
+}
+
+double _asDouble(dynamic v) {
+  if (v is double) return v;
+  if (v is int) return v.toDouble();
+  if (v is num) return v.toDouble();
+  if (v is String) return double.tryParse(v.trim()) ?? 0.0;
+  return 0.0;
 }

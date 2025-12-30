@@ -1,17 +1,30 @@
-// lib/service/match_score_service.dart
 //
 // Full service with: end match (returns Super Over id), submit score, undo,
 // end innings, squads, last six balls (with fallback), bowler overs, current score.
+//
 
 import 'dart:convert';
-// debugPrint
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:http/http.dart' as http;
 import 'package:flutter/material.dart';
 
 import '../model/match_score_model.dart';
 import '../api/api_helper.dart';
+import '../utils/score_log.dart';
 
+
+void _logEndMatch(String where, {
+  required Uri uri,
+  required Map<String, String> body,
+  int? httpStatus,
+  String? respBody,
+}) {
+  debugPrint('• [END-MATCH][$where]');
+  debugPrint('  URL => $uri');
+  debugPrint('  BODY => $body');
+  if (httpStatus != null) debugPrint('  HTTP => $httpStatus');
+  if (respBody != null) debugPrint('  RESP => $respBody');
+}
 class EndMatchResult {
   final bool ok;
   final int? superOverMatchId;
@@ -47,12 +60,13 @@ class EndMatchResult {
       soId = idStr != null ? int.tryParse(idStr) : null;
     }
 
-    // 2) Direct id keys
+    // 2) Direct id keys (plus nested data variant)
     soId ??= _toInt(j['super_over_match_id']) ??
         _toInt(j['new_match_id']) ??
-        _toInt(j['child_match_id']);
+        _toInt(j['child_match_id']) ??
+        _toInt((j['data'] as Map?)?['super_over_match_id']);
 
-    final ok = j['status'] == 1;
+    final ok = (j['status'] == 1 || j['status'] == '1'); // tolerate string "1"
     final msg = (j['message'] ?? '').toString();
 
     return EndMatchResult(ok: ok, superOverMatchId: soId, message: msg, raw: j);
@@ -66,67 +80,164 @@ class MatchScoreService {
   // ────────────────────────────────────────────────────────────────────────────
   // END MATCH (with optional Super Over) – returns Super Over match id (if any)
   // ────────────────────────────────────────────────────────────────────────────
-
-  /// New: end match and get structured result including Super Over match id.
-  /// IMPORTANT: When Tie + Super Over selected, pass `superOvers: 'Yes'`.
   static Future<EndMatchResult> endMatchWithResult({
     required BuildContext context,
     required String token,
     required int matchId,
-    required String resultType, // 'Win', 'Draw', 'Tie', 'WinBToss'
+    required String resultType,   // 'Win' | 'Draw' | 'WinBToss' | 'Tie'
     int? winningTeam,
     int? runsOrWicket,
-    String? winByType,          // 'runs' | 'wickets' (case-insensitive)
+    String? winByType,            // 'Runs' | 'Wickets'
     String? drawComment,
-    String? superOvers,         // 'Yes' when Tie + Super Over selected, else null
+    String? superOvers,           // 'Yes' when Tie + Super Over
   }) async {
-    // Keeping your existing endpoint form (token & matchId in query; POST body for rest)
-    final uri = Uri.parse(
-      '$_baseUrl/end-match?api_logged_in_token=$token&match_id=$matchId',
-    );
+    // Normalize display choice
+    String? normWinBy(String? v) {
+      if (v == null) return null;
+      final s = v.trim().toLowerCase();
+      if (s == 'run' || s == 'runs') return 'Runs';
+      if (s == 'wicket' || s == 'wickets') return 'Wickets';
+      return null;
+    }
+    final winBy = normWinBy(winByType);
 
-    final payload = <String, String>{
-      'result_type': resultType,
-      if (winningTeam != null) 'winning_team': '$winningTeam',
-      if (runsOrWicket != null) 'runs_or_wicket': '$runsOrWicket',
-      if (winByType != null) 'win_by_type': winByType.toLowerCase(),
-      if (drawComment != null) 'draw_match_comment': drawComment,
-      if (superOvers != null) 'super_overs': superOvers, // 'Yes'
-    };
-
-    final res = await ApiHelper.safeRequest(
-      context: context,
-      requestFn: () => http.post(uri, body: payload),
-    );
-
-    if (res == null || res.statusCode != 200) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('❌ Failed to end match')),
-      );
-      return const EndMatchResult(
-        ok: false,
-        superOverMatchId: null,
-        message: 'HTTP error',
-      );
+    // Client guards
+    if (resultType == 'Win') {
+      if (winningTeam == null || runsOrWicket == null || runsOrWicket <= 0 || winBy == null) {
+        return const EndMatchResult(ok: false, message: 'Winning team, margin and win_by_type are required for Win');
+      }
+    }
+    if (resultType == 'Draw' && (drawComment == null || drawComment.trim().isEmpty)) {
+      return const EndMatchResult(ok: false, message: 'draw_match_comment is required for Draw');
     }
 
-    final decoded = json.decode(res.body) as Map<String, dynamic>;
-    final parsed = EndMatchResult.fromJson(decoded);
+    final baseUri = Uri.parse('$_baseUrl/end-match').replace(queryParameters: {
+      'api_logged_in_token': token,
+      'match_id': '$matchId',
+    });
 
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(
-        content: Text(
-          parsed.ok
-              ? (parsed.message?.isNotEmpty == true
-              ? parsed.message!
-              : '✅ Match ended successfully')
-              : '❌ ${parsed.message ?? 'Failed to end match'}',
-        ),
-      ),
-    );
+    // Common fields always sent in BODY too
+    final common = <String, String>{
+      'api_logged_in_token': token,
+      'match_id': '$matchId',
+      'result_type': resultType,
+    };
 
-    return parsed;
+    // Build candidate payloads (most likely first)
+    List<Map<String, String>> candidates() {
+      if (resultType == 'Win') {
+        final lower = winBy!.toLowerCase();              // runs | wickets
+        final singular = (winBy == 'Wickets') ? 'Wicket' : winBy; // Wicket | Runs
+
+        // A) Official docs keys (+ widely-seen aliases)
+        final a = {
+          ...common,
+          'winning_team': '$winningTeam',
+          'winning_team_id': '$winningTeam',            // alias
+          'runs_or_wicket': '$runsOrWicket',
+          'runs_or_wickets': '$runsOrWicket',           // alias
+          'win_by_type': winBy,                          // TitleCase
+          'win_by': lower,                               // alias lower
+        };
+
+        // B) Some backends want singular 'Wicket' in type
+        final b = {
+          ...a,
+          'win_by_type': singular,                       // 'Wicket' or 'Runs'
+        };
+
+        // C) Some expect separate keys instead of a combined one
+        final c = {
+          ...common,
+          'winning_team': '$winningTeam',
+          'winning_team_id': '$winningTeam',
+          if (winBy == 'Runs') ...{
+            'win_by_type': 'Runs',
+            'win_by_runs': '$runsOrWicket',
+          } else ...{
+            'win_by_type': singular,                     // 'Wicket'
+            'win_by_wickets': '$runsOrWicket',
+          },
+          'win_by': lower,
+        };
+
+        return [a, b, c];
+      }
+
+      if (resultType == 'WinBToss') {
+        return [
+          {...common, if (winningTeam != null) 'winning_team': '$winningTeam'},
+        ];
+      }
+
+      if (resultType == 'Draw') {
+        return [
+          {...common, 'draw_match_comment': drawComment!.trim()},
+        ];
+      }
+
+      // Tie
+      return [
+        {...common, if (superOvers == 'Yes') 'super_overs': 'Yes'},
+      ];
+    }
+
+    Future<(int code, Map<String, dynamic>? json, String raw)> _postOnce(
+        Map<String, String> body,
+        ) async {
+      // Put all fields in the query string as well as in POST body
+      final reqUri = baseUri.replace(
+        queryParameters: {...baseUri.queryParameters, ...body},
+      );
+
+      _logEndMatch('REQ-POST', uri: reqUri, body: body);
+
+      http.Response? res;
+      try {
+        res = await ApiHelper.safeRequest(
+          context: context,
+          requestFn: () => http.post(
+            reqUri,
+            headers: {
+              'Accept': 'application/json',
+              'Content-Type': 'application/x-www-form-urlencoded',
+            },
+            body: body,
+          ),
+        );
+      } catch (e) {
+        _logEndMatch('ERR', uri: reqUri, body: body, respBody: 'exception: $e');
+        return (0, null, 'exception: $e');
+      }
+      if (res == null) return (0, null, 'no response');
+
+      _logEndMatch('RES-POST',
+          uri: reqUri, body: body, httpStatus: res.statusCode, respBody: res.body);
+
+      Map<String, dynamic>? j;
+      try { j = jsonDecode(res.body) as Map<String, dynamic>; } catch (_) {}
+      return (res.statusCode, j, res.body);
+    }
+
+
+    // Try candidates until one succeeds
+    String? lastMsg;
+    for (final payload in candidates()) {
+      final (code, j, raw) = await _postOnce(payload);
+      final ok = code == 200 && (j?['status'] == 1 || j?['status'] == '1');
+      if (ok) return EndMatchResult.fromJson(j!);
+
+      final msg = j?['message']?.toString();
+      lastMsg = (msg != null && msg.isNotEmpty) ? msg : 'HTTP $code';
+      // If we hit the “required” message, keep trying the next variant
+      if (lastMsg!.toLowerCase().contains('required')) continue;
+      // For any other error, stop early
+      break;
+    }
+
+    return EndMatchResult(ok: false, message: lastMsg ?? 'End match failed');
   }
+
 
   /// Backward-compatible wrapper (keeps old calls compiling).
   static Future<bool> endMatch({
@@ -154,11 +265,6 @@ class MatchScoreService {
     return r.ok;
   }
 
-  // ────────────────────────────────────────────────────────────────────────────
-  // SUBMIT SCORE / UNDO / INNINGS / SQUADS / SNAPSHOTS / HELPERS
-  // ────────────────────────────────────────────────────────────────────────────
-
-  /// Submit a single ball’s score
   static Future<bool> submitScore(
       MatchScoreRequest req,
       String token,
@@ -168,24 +274,24 @@ class MatchScoreService {
       '$_baseUrl/save-cricket-match-score?api_logged_in_token=$token',
     );
 
-    final body = <String, String>{
-      'match_id': req.matchId.toString(),
-      'batting_team_id': req.battingTeamId.toString(),
-      'on_strike_player_id': req.onStrikePlayerId.toString(),
-      'on_strike_player_order': req.onStrikePlayerOrder.toString(),
-      'non_strike_player_id': req.nonStrikePlayerId.toString(),
-      'non_strike_player_order': req.nonStrikePlayerOrder.toString(),
-      'bowler': req.bowler.toString(),
-      'over_number': req.overNumber.toString(),
-      'ball_number': req.ballNumber.toString(),
-      'runs': req.runs.toString(),
-      'extra_run_type': req.extraRunType ?? '0',
-      if (req.extraRun != null) 'extra_run': req.extraRun!.toString(),
-      if (req.isWicket != null) 'is_wicket': req.isWicket!.toString(),
-      if (req.wicketType != null) 'wicket_type': req.wicketType!,
-      if (req.commentry != null) 'commentry': req.commentry!, // API spelling
-      if (req.wktkprId != null) 'wktkpr_id': req.wktkprId!.toString(),
-    };
+    // ✅ build the full, correct payload from the model
+    final body = req.toFormFields();
+
+    // ✅ compact, ball-wise log only (no noisy GET logs)
+    ScoreLog.ball(
+      'SUBMIT o${body['over_number']}.b${body['ball_number']} | '
+          'bat:${body['batting_team_id']} '
+          'str:${body['on_strike_player_id']} '
+          'non:${body['non_strike_player_id']} '
+          'bowl:${body['bowler']} '
+          'runs:${body['runs']} '
+          'extra:${body['extra_run_type']}${body['extra_run'] != null ? '(${body['extra_run']})' : ''} '
+          'wicket:${body['is_wicket'] ?? '0'} '
+          'type:${body['wicket_type'] ?? '-'} '
+          'out:${body['out_player'] ?? '-'} '
+          'ro_by:${body['run_out_by'] ?? '-'} '
+          'catch:${body['catch_by'] ?? '-'}',
+    );
 
     final res = await ApiHelper.safeRequest(
       context: context,
@@ -269,8 +375,9 @@ class MatchScoreService {
           '&match_id=$matchId'
           '&team_id=$teamId',
     );
+
     final sixRes = await http.get(sixUri);
-    debugPrint('🔍 GET $sixUri → ${sixRes.statusCode}: ${sixRes.body}');
+    ScoreLog.net('GET $sixUri → ${sixRes.statusCode}');
 
     if (sixRes.statusCode == 200) {
       final body = json.decode(sixRes.body) as Map<String, dynamic>;
@@ -288,21 +395,22 @@ class MatchScoreService {
           };
         }).toList();
       } else {
-        debugPrint('   ↳ get-last-six-balls returned no list; will fallback');
+        ScoreLog.net('last-six-balls empty → fallback');
       }
     } else {
-      debugPrint('❌ HTTP ${sixRes.statusCode} on get-last-six-balls, fallback');
+      ScoreLog.net('HTTP ${sixRes.statusCode} on last-six-balls → fallback');
     }
 
     // Fallback: current-match-score → current_inning.last_ball_data
-    debugPrint('🛠️ Fallback to get-current-match-score');
+    ScoreLog.net('Fallback to current-score');
     final curUri = Uri.parse(
       '$_baseUrl/get-current-match-score'
           '?api_logged_in_token=$token'
           '&match_id=$matchId',
     );
+
     final curRes = await http.get(curUri);
-    debugPrint('🔍 GET $curUri → ${curRes.statusCode}: ${curRes.body}');
+    ScoreLog.net('GET $curUri → ${curRes.statusCode}');
     if (curRes.statusCode != 200) return [];
 
     final curBody = json.decode(curRes.body) as Map<String, dynamic>;
@@ -313,11 +421,11 @@ class MatchScoreService {
     final lastList = inning?['last_ball_data'] as List<dynamic>?;
 
     if (lastList == null || lastList.isEmpty) {
-      debugPrint('   ↳ Fallback last_ball_data empty');
+      ScoreLog.net('fallback last_ball_data empty');
       return [];
     }
 
-    debugPrint('   ↳ Parsing fallback last_ball_data');
+    ScoreLog.net('parsing fallback last_ball_data');
     return lastList.map<Map<String, dynamic>>((e) {
       return {
         'over_number': int.tryParse('${e['over_number']}') ?? 0,
@@ -382,9 +490,6 @@ class MatchScoreService {
     return body['current_score'] as Map<String, dynamic>;
   }
 
-  // import 'dart:convert';
-// import 'package:http/http.dart' as http;
-
   static Future<Map<String, dynamic>?> fetchLastBall({
     required int matchId,
     required int teamId,
@@ -407,6 +512,8 @@ class MatchScoreService {
     }
     return null;
   }
+
+  /// Save Player of the Match (API prefers GET with query params)
   static Future<bool> savePlayerOfTheMatch({
     required BuildContext context,
     required String token,
@@ -414,40 +521,48 @@ class MatchScoreService {
     required int playerId,
     Duration timeout = const Duration(seconds: 20),
   }) async {
-    final uri = Uri.parse(
-      'https://cricjust.in/wp-json/custom-api-for-cricket/save-player-of-the-match'
-          '?api_logged_in_token=$token&match_id=$matchId',
-    );
+    final base = '$_baseUrl/save-player-of-the-match';
+    final postUri = Uri.parse(base);
+    final postBody = {
+      'api_logged_in_token': token,
+      'match_id': '$matchId',
+      'player_id': '$playerId',
+    };
 
-    try {
-      final res = await http
-          .post(uri, body: {'player_id': playerId.toString()})
+    Future<(int status, Map<String, dynamic>? json)> tryPost() async {
+      final r = await http
+          .post(postUri, headers: {'Accept': 'application/json'}, body: postBody)
           .timeout(timeout);
-
-      Map<String, dynamic> map;
-      try {
-        map = jsonDecode(res.body) as Map<String, dynamic>;
-      } catch (_) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('PoTM save failed: HTTP ${res.statusCode}')),
-        );
-        return false;
-      }
-
-      final ok = (map['status'] == 1 || map['status'] == '1');
-      if (!ok) {
-        final msg = map['message']?.toString() ?? 'Unknown error';
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('PoTM save failed: $msg')),
-        );
-      }
-      return ok;
-    } catch (e) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('PoTM save error: $e')),
-      );
-      return false;
+      Map<String, dynamic>? m;
+      try { m = jsonDecode(r.body) as Map<String, dynamic>; } catch (_) {}
+      return (r.statusCode, m);
     }
+
+    Future<(int status, Map<String, dynamic>? json)> tryGet() async {
+      final getUri = postUri.replace(queryParameters: postBody);
+      final r = await http.get(getUri).timeout(timeout);
+      Map<String, dynamic>? m;
+      try { m = jsonDecode(r.body) as Map<String, dynamic>; } catch (_) {}
+      return (r.statusCode, m);
+    }
+
+    // 1) Prefer POST
+    var (status, body) = await tryPost();
+
+    // 405/404 or explicit WP message → fallback to GET
+    final noRoute = body?['message']?.toString().toLowerCase().contains('no route was found') == true;
+    if (status == 405 || status == 404 || noRoute) {
+      (status, body) = await tryGet();
+    }
+
+    final ok = (body?['status'] == 1 || body?['status'] == '1');
+    if (!ok) {
+      final msg = body?['message']?.toString() ?? 'HTTP $status';
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('PoTM save failed: $msg')),
+      );
+    }
+    return ok;
   }
 
 }

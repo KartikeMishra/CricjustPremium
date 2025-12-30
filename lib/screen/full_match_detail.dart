@@ -55,7 +55,7 @@ class _FullMatchDetailState extends State<FullMatchDetail> {
   // 🔄 pull-to-refresh tick (for Stats tab)
   int _refreshTick = 0;
 
-  // ✅ Summary tab only when completed AND we have summary
+  // ✅ Summary tab only when completed
   bool _showSummaryTab = false;
 
   // Preserve current tab when the tab count changes
@@ -109,19 +109,19 @@ class _FullMatchDetailState extends State<FullMatchDetail> {
 
       final raw = result.rawMatchData;
 
-      // ✅ Trust status for completion; avoid heuristics that can mark live as "completed"
-      final bool isCompleted = _isCompletedValue(raw['status']);
-
-      // ✅ Only show if we truly have summary content
-      final hasSummary = result.rawSummary != null &&
-          (result.rawSummary is Map ? (result.rawSummary as Map).isNotEmpty : true);
+      // ✅ Completed if status says so OR result fields are present.
+      final bool isCompleted = _isCompletedValue(raw['status']) ||
+          (raw['match_result']?.toString().trim().isNotEmpty ?? false) ||
+          (raw['result']?.toString().trim().isNotEmpty ?? false);
 
       setState(() {
         summaryData = result;
         _fallbackMatchData = null;
         isLoading = false;
         error = null;
-        _showSummaryTab = isCompleted && hasSummary;
+
+        // ✅ Show the Summary tab whenever the match is completed.
+        _showSummaryTab = isCompleted;
       });
     } catch (e, st) {
       debugPrint('❌ fetchMatchSummary failed: $e\n$st');
@@ -134,7 +134,7 @@ class _FullMatchDetailState extends State<FullMatchDetail> {
           _fallbackMatchData = meta;
           isLoading = false;
           error = null;
-          _showSummaryTab = false; // no summary available on fallback
+          _showSummaryTab = false; // no reliable completion/summary on fallback
         });
       } else {
         if (!mounted) return;
@@ -354,6 +354,14 @@ class _FullMatchDetailState extends State<FullMatchDetail> {
     return 0;
   }
 
+  bool _hasAnySummary(dynamic s) {
+    if (s == null) return false;
+    if (s is String) return s.trim().isNotEmpty;
+    if (s is Map) return s.isNotEmpty;
+    if (s is List) return s.isNotEmpty;
+    return true; // some other non-null type
+  }
+
   @override
   Widget build(BuildContext context) {
     if (isLoading) {
@@ -403,16 +411,18 @@ class _FullMatchDetailState extends State<FullMatchDetail> {
       const Tab(text: 'Squad'),
       const Tab(text: 'Stats'),
       const Tab(text: 'Commentary'),
-      const Tab(text: 'Info')
+      const Tab(text: 'Info'), // Info last
     ];
 
     final List<Widget> views = [
       if (showSummary)
-        MatchSummaryTab(
+        (_hasAnySummary(summaryData!.rawSummary)
+            ? MatchSummaryTab(
           matchId: widget.matchId,
           summary: summaryData!.rawSummary,
           matchData: summaryData!.rawMatchData,
-        ),
+        )
+            : _SummaryPlaceholder(matchData: summaryData!.rawMatchData)),
       ScorecardScreen(matchId: widget.matchId),
       MatchSquadTab(matchId: widget.matchId),
       MatchStatsTab(
@@ -428,7 +438,7 @@ class _FullMatchDetailState extends State<FullMatchDetail> {
         team1Name: team1Name,
         team2Name: team2Name,
       ),
-      MatchInfoTab(matchData: raw)
+      MatchInfoTab(matchData: raw),
     ];
 
     // Clamp previously saved tab index to new length
@@ -529,7 +539,8 @@ class _FullMatchDetailState extends State<FullMatchDetail> {
                                 isScrollable: true,
                                 dividerColor: Colors.transparent,
                                 overlayColor: WidgetStateProperty.all(Colors.transparent),
-                                indicatorPadding: const EdgeInsets.symmetric(horizontal: 6, vertical: 6),
+                                indicatorPadding:
+                                const EdgeInsets.symmetric(horizontal: 6, vertical: 6),
                                 indicator: const ShapeDecoration(
                                   color: Colors.white,
                                   shape: StadiumBorder(),
@@ -541,7 +552,8 @@ class _FullMatchDetailState extends State<FullMatchDetail> {
                                 labelPadding: const EdgeInsets.symmetric(horizontal: 14),
                                 labelColor: AppColors.primary,
                                 unselectedLabelColor: Colors.white,
-                                labelStyle: const TextStyle(fontSize: 15, fontWeight: FontWeight.w700),
+                                labelStyle:
+                                const TextStyle(fontSize: 15, fontWeight: FontWeight.w700),
                                 unselectedLabelStyle:
                                 const TextStyle(fontSize: 15, fontWeight: FontWeight.w600),
                                 tabs: tabs,
@@ -578,12 +590,17 @@ class _FullMatchDetailState extends State<FullMatchDetail> {
                               padding: const EdgeInsets.all(12),
                               child: TVStyleScoreScreen(
                                 teamName: _liveScore!['team_name'] ?? '',
-                                runs: int.tryParse(_liveScore!['score']['total_runs'].toString()) ?? 0,
-                                wickets: int.tryParse(_liveScore!['score']['total_wkts'].toString()) ?? 0,
+                                runs:
+                                int.tryParse(_liveScore!['score']['total_runs'].toString()) ?? 0,
+                                wickets:
+                                int.tryParse(_liveScore!['score']['total_wkts'].toString()) ??
+                                    0,
                                 overs: _oversAsDouble(
                                   Map<String, dynamic>.from(_liveScore!['score'] as Map),
                                 ),
-                                extras: int.tryParse(_liveScore!['score']['extra_runs'].toString()) ?? 0,
+                                extras:
+                                int.tryParse(_liveScore!['score']['extra_runs'].toString()) ??
+                                    0,
                                 matchId: widget.matchId,
                                 teamId: int.parse(_liveScore!['team_id'].toString()),
                                 isLive: isLive,
@@ -734,7 +751,7 @@ Widget cjImage(
 Widget _safeNetImg(String? url, {double? width, double? height, BoxFit fit = BoxFit.cover}) =>
     cjImage(url, width: width, height: height, fit: fit);
 
-// ====== Sponsor widgets (unchanged visuals for centered name) ======
+// ====== Sponsor widgets ======
 class _SponsorCarousel extends StatefulWidget {
   final List<Sponsor> sponsors;
   const _SponsorCarousel({required this.sponsors});
@@ -869,6 +886,36 @@ class _SponsorCarouselState extends State<_SponsorCarousel> {
             }),
           ),
       ],
+    );
+  }
+}
+
+class _SummaryPlaceholder extends StatelessWidget {
+  final Map<String, dynamic> matchData;
+  const _SummaryPlaceholder({required this.matchData});
+
+  @override
+  Widget build(BuildContext context) {
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+    return Center(
+      child: Padding(
+        padding: const EdgeInsets.all(24),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Icon(Icons.pending_outlined, size: 56, color: isDark ? Colors.white54 : Colors.black45),
+            const SizedBox(height: 12),
+            Text(
+              'Summary will be available shortly.',
+              textAlign: TextAlign.center,
+              style: TextStyle(
+                fontWeight: FontWeight.w700,
+                color: isDark ? Colors.white70 : Colors.black87,
+              ),
+            ),
+          ],
+        ),
+      ),
     );
   }
 }

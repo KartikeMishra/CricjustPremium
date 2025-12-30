@@ -218,7 +218,7 @@ class PlayerStatsCard extends StatelessWidget {
                       style: TextStyle(fontSize: nameSize, fontWeight: FontWeight.bold)),
                   const SizedBox(height: 2),
                   Text(
-                    '$overs ov, $maidens M, $runs R, $wickets W, Econ: ${econ.toStringAsFixed(2)}',
+                    '$overs ov, $maidens M, $runs R, $wickets W, Econs: ${econ.toStringAsFixed(2)}',
                     style: TextStyle(
                       fontSize: labelSize,
                       color: isDark ? Colors.grey[400] : Colors.grey[700],

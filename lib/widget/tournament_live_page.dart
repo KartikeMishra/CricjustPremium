@@ -10,7 +10,7 @@ import '../screen/tournament_detail_screen.dart';
 import '../theme/color.dart';
 import '../theme/text_styles.dart';
 
-// 🔹 NEW: subtle card graphics (glow + watermark)
+// 🔹 Subtle card graphics (glow + watermark)
 import '../widget/section_graphics.dart';
 
 class AllLiveTournamentsScreen extends StatefulWidget {
@@ -33,11 +33,13 @@ class _AllLiveTournamentsScreenState extends State<AllLiveTournamentsScreen> {
 
   Future<void> _fetchTournaments() async {
     try {
-      final data = await TournamentService.fetchTournaments(
+      // ✅ Use the correct public API (no token needed)
+      final data = await TournamentService.fetchPublicTournaments(
         type: 'live',
         limit: 20,
         skip: 0,
       );
+
       if (!mounted) return;
       setState(() {
         _tournaments = data;
@@ -195,6 +197,9 @@ class _AllLiveTournamentsScreenState extends State<AllLiveTournamentsScreen> {
   }
 }
 
+// -----------------------------------------------------------------------------
+// Tournament Card
+// -----------------------------------------------------------------------------
 class _TournamentCard extends StatelessWidget {
   final TournamentModel tournament;
   final String startLabel;
@@ -221,9 +226,7 @@ class _TournamentCard extends StatelessWidget {
           borderRadius: BorderRadius.circular(20),
           child: Stack(
             children: [
-              // 🌈 soft glow behind content
               const Positioned.fill(child: CardAuroraOverlay()),
-              // 🏆 ultra-subtle watermark icon
               const Positioned.fill(
                 child: WatermarkIcon(
                   icon: Icons.emoji_events_rounded,
@@ -232,7 +235,6 @@ class _TournamentCard extends StatelessWidget {
                   opacity: 0.05,
                 ),
               ),
-              // Card + glass blur + content
               BackdropFilter(
                 filter: ImageFilter.blur(sigmaX: 2.5, sigmaY: 2.5),
                 child: Container(
@@ -268,7 +270,6 @@ class _TournamentCard extends StatelessWidget {
                     padding: const EdgeInsets.all(14),
                     child: Row(
                       children: [
-                        // Logo
                         ClipRRect(
                           borderRadius: BorderRadius.circular(12),
                           child: tournament.tournamentLogo.isNotEmpty
@@ -283,12 +284,10 @@ class _TournamentCard extends StatelessWidget {
                               : _logoFallback(),
                         ),
                         const SizedBox(width: 14),
-                        // Texts
                         Expanded(
                           child: Column(
                             crossAxisAlignment: CrossAxisAlignment.start,
                             children: [
-                              // Title + LIVE pill
                               Row(
                                 children: [
                                   Expanded(
@@ -326,7 +325,6 @@ class _TournamentCard extends StatelessWidget {
                                   ),
                                 ),
                               const SizedBox(height: 6),
-                              // Meta row
                               Wrap(
                                 spacing: 8,
                                 runSpacing: 6,
@@ -348,8 +346,7 @@ class _TournamentCard extends StatelessWidget {
                         ),
                         const SizedBox(width: 6),
                         Icon(Icons.chevron_right,
-                            color:
-                            isDark ? Colors.white54 : Colors.black38),
+                            color: isDark ? Colors.white54 : Colors.black38),
                       ],
                     ),
                   ),
@@ -375,10 +372,11 @@ class _TournamentCard extends StatelessWidget {
         color: isDark ? Colors.white38 : Colors.black38),
   );
 
-  Widget _metaChip(
-      {required IconData icon,
-        required String label,
-        required bool isDark}) {
+  Widget _metaChip({
+    required IconData icon,
+    required String label,
+    required bool isDark,
+  }) {
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
       decoration: BoxDecoration(
@@ -386,8 +384,8 @@ class _TournamentCard extends StatelessWidget {
             ? Colors.white.withValues(alpha: 0.06)
             : Colors.black.withValues(alpha: 0.04),
         borderRadius: BorderRadius.circular(20),
-        border: Border.all(
-            color: isDark ? Colors.white12 : Colors.black12),
+        border:
+        Border.all(color: isDark ? Colors.white12 : Colors.black12),
       ),
       child: Row(
         mainAxisSize: MainAxisSize.min,
@@ -426,8 +424,8 @@ class _TournamentCard extends StatelessWidget {
           ),
         ],
       ),
-      child: Row(
-        children: const [
+      child: const Row(
+        children: [
           _BlinkDot(),
           SizedBox(width: 6),
           Text(

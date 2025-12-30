@@ -506,18 +506,67 @@ class _MatchUIScreenState extends State<MatchUIScreen> {
     await _fetchVenues(reset: true);
   }
 
+
   Future<void> _fetchTournaments() async {
+    if (_apiToken == null || _apiToken!.isEmpty) return;
+
+    try {
+      // ✅ Fetch only user-created tournaments
+      final userTournaments = await TournamentService.fetchUserTournaments(
+        apiToken: _apiToken!,
+        limit: 20,
+        skip: 0,
+      );
+
+      setState(() {
+        _tournaments = userTournaments
+            .map((e) => {
+          'tournament_id': e.tournamentId,
+          'tournament_name': e.tournamentName,
+        })
+            .toList();
+      });
+    } catch (e) {
+      final msg = e.toString().toLowerCase();
+      if (msg.contains('session expired') || msg.contains('unauthorized')) {
+        final prefs = await SharedPreferences.getInstance();
+        await prefs.clear();
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(
+              content: Text('Session expired. Please login again.'),
+              backgroundColor: Colors.red,
+            ),
+          );
+          Navigator.pushReplacement(
+            context,
+            MaterialPageRoute(builder: (_) => const LoginScreen()),
+          );
+        }
+      } else {
+        _showError('Failed to load tournaments: $e');
+      }
+    }
+  }
+/*
+  Future<void> _fetchTournaments() async {
+    if (_apiToken == null || _apiToken!.isEmpty) return;
+
     try {
       final live = await TournamentService.fetchTournaments(
+        apiToken: _apiToken!, // ✅ pass token
         type: 'live',
         limit: 20,
         skip: 0,
       );
+
       final upcoming = await TournamentService.fetchTournaments(
+        apiToken: _apiToken!, // ✅ pass token
         type: 'upcoming',
         limit: 20,
         skip: 0,
       );
+
       setState(() {
         _tournaments = [...live, ...upcoming]
             .map((e) => {
@@ -527,9 +576,28 @@ class _MatchUIScreenState extends State<MatchUIScreen> {
             .toList();
       });
     } catch (e) {
-      _showError(e.toString());
+      // ✅ Auto logout on expired session
+      if (e.toString().toLowerCase().contains('session expired')) {
+        final prefs = await SharedPreferences.getInstance();
+        await prefs.clear();
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(
+              content: Text('Session expired. Please login again.'),
+              backgroundColor: Colors.red,
+            ),
+          );
+          Navigator.pushReplacement(
+            context,
+            MaterialPageRoute(builder: (_) => const LoginScreen()),
+          );
+        }
+      } else {
+        _showError('Failed to load tournaments: $e');
+      }
     }
-  }
+  }*/
+
 
   void _resetTournamentState() {
     setState(() {
