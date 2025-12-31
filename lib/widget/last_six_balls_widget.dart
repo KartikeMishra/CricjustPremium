@@ -1,5 +1,6 @@
 import 'dart:async';
 import 'dart:developer' as dev;
+import 'dart:io'; // ✅ ADD ONLY THIS
 import 'package:flutter/material.dart';
 import '../service/match_score_service.dart';
 
@@ -26,10 +27,8 @@ class LastSixBallsWidget extends StatefulWidget {
 }
 
 class _LastSixBallsWidgetState extends State<LastSixBallsWidget> {
-  // ✅ fix 1: correct generics and allow reassignment later
   late Future<List<Map<String, dynamic>>> _bootstrapFuture;
 
-  // ✅ fix 2: typed empty list to avoid inference issues
   List<Map<String, dynamic>> _lastData = const <Map<String, dynamic>>[];
   String? _lastDigest;
 
@@ -53,7 +52,7 @@ class _LastSixBallsWidgetState extends State<LastSixBallsWidget> {
       setState(() {
         _lastData = const <Map<String, dynamic>>[];
         _lastDigest = null;
-        _bootstrapFuture = _loadOnce(); // allowed because it's not final
+        _bootstrapFuture = _loadOnce();
       });
     }
 
@@ -81,6 +80,7 @@ class _LastSixBallsWidgetState extends State<LastSixBallsWidget> {
     _debounce = Timer(const Duration(milliseconds: 250), _silentRefresh);
   }
 
+  // ================== LOAD ONCE ==================
   Future<List<Map<String, dynamic>>> _loadOnce() async {
     dev.Timeline.startSync('last-six-balls bootstrap');
     try {
@@ -92,14 +92,19 @@ class _LastSixBallsWidgetState extends State<LastSixBallsWidget> {
       _lastData = six;
       _lastDigest = _digest(six);
       return six;
+    } on HandshakeException {
+      return const <Map<String, dynamic>>[];
+    } on TimeoutException {
+      return const <Map<String, dynamic>>[];
     } catch (e, st) {
-      debugPrint('🔴 LastSixBalls bootstrap error: $e\n$st');
+      debugPrint('⚠️ LastSixBalls bootstrap error: $e\n$st');
       return const <Map<String, dynamic>>[];
     } finally {
       dev.Timeline.finishSync();
     }
   }
 
+  // ================== SILENT REFRESH ==================
   Future<void> _silentRefresh() async {
     if (!mounted || _inFlight) return;
     _inFlight = true;
@@ -115,8 +120,12 @@ class _LastSixBallsWidgetState extends State<LastSixBallsWidget> {
         _lastDigest = dig;
         if (mounted) setState(() => _lastData = six);
       }
+    } on HandshakeException {
+      // silent ignore
+    } on TimeoutException {
+      // silent ignore
     } catch (e, st) {
-      debugPrint('🔴 LastSixBalls refresh error: $e\n$st');
+      debugPrint('⚠️ LastSixBalls refresh error: $e\n$st');
     } finally {
       _inFlight = false;
       dev.Timeline.finishSync();
@@ -245,8 +254,9 @@ class _LastSixBallsWidgetState extends State<LastSixBallsWidget> {
         case 'BYE': core = 'B'; break;
         default: core = rawType;
       }
-      // Hide the implicit single for WD/NB, keep numbers for 2+ wides/no-balls or other extras.
-      final showNumber = (core == 'WD' || core == 'NB') ? (extraRun > 1) : (extraRun > 0);
+      final showNumber = (core == 'WD' || core == 'NB')
+          ? (extraRun > 1)
+          : (extraRun > 0);
       final extraPart = showNumber ? extraRun.toString() : '';
       final runPart   = runs > 0 ? '+$runs' : '';
       return '$extraPart$core$runPart';
@@ -254,7 +264,6 @@ class _LastSixBallsWidgetState extends State<LastSixBallsWidget> {
 
     return runs == 0 ? '•' : runs.toString();
   }
-
 
   Color _getBallColor(String v) {
     final value = v.toUpperCase();

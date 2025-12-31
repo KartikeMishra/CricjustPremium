@@ -140,6 +140,8 @@ const Map<String, String> kWicketTypeMap = {
 
 class _AddScoreScreenState extends State<AddScoreScreen>
 {
+  final List<MatchScoreRequest> _pendingQueue = [];
+  bool _isSyncingQueue = false;
 
   final RegExp _timelineRegex = RegExp(r'^\d+\.\d+:');
   late final ScoringUIController ui;
@@ -251,6 +253,75 @@ class _AddScoreScreenState extends State<AddScoreScreen>
     }
   }
 
+  Future<void> _syncQueue() async {
+    if (_isSyncingQueue || _pendingQueue.isEmpty) return;
+
+    _isSyncingQueue = true;
+    debugPrint('🔁 SYNC QUEUE START (${_pendingQueue.length})');
+
+    try {
+      while (_pendingQueue.isNotEmpty) {
+        final req = _pendingQueue.first;
+
+        // 🛡️ DUPLICATE BALL GUARD
+        final key = '${req.overNumber - 1}.${req.ballNumber}';
+        if (_submittedBalls.contains(key)) {
+          debugPrint('⏭️ QUEUE SKIP duplicate ball $key');
+          _pendingQueue.removeAt(0);
+          continue;
+        }
+
+        final success = await MatchScoreService
+            .submitScore(req, widget.token, context)
+            .timeout(const Duration(seconds: 8));
+
+        if (success) {
+          debugPrint('✅ QUEUE SENT → $key');
+          _submittedBalls.add(key); // ✅ mark submitted
+          _pendingQueue.removeAt(0);
+        } else {
+          debugPrint('❌ QUEUE FAILED → retry later');
+          break;
+        }
+      }
+    } catch (e) {
+      debugPrint('⚠️ QUEUE ERROR: $e');
+    } finally {
+      _isSyncingQueue = false;
+      await _persistQueue(); // 🔥 CRITICAL
+    }
+  }
+
+  void _unawaitedRefreshScore() {
+    // ✅ ADD THIS GUARD
+    if (_bgFetching || _pendingQueue.isNotEmpty) {
+      debugPrint('⏭️ BG refresh skipped (pending queue)');
+      return;
+    }
+
+    _bgFetching = true;
+
+    Future.microtask(() async {
+      try {
+        Perf.start('FETCH_SCORE_BG');
+        final refreshed = await _fetchCurrentScoreData();
+        Perf.end('FETCH_SCORE_BG');
+
+        if (!mounted || refreshed == null) return;
+
+        Perf.start('PARSE_BG');
+        _parseCurrentScore(refreshed, overridePlayers: false);
+        Perf.end('PARSE_BG');
+
+        setState(() {});
+      } finally {
+        _bgFetching = false;
+      }
+    });
+  }
+
+
+
   Future<void> _init() async {
     try {
       // 1️⃣ FAST + CRITICAL (UI can render after this)
@@ -262,6 +333,10 @@ class _AddScoreScreenState extends State<AddScoreScreen>
       }
 
       if (mounted) setState(() {}); // 👈 UI COMES UP HERE
+
+      // 🔥🔥🔥 ADD THESE TWO LINES (ORDER MATTERS)
+      await _restoreQueue();   // 1️⃣ load pending balls from disk
+      _syncQueue();            // 2️⃣ try sending them
 
       // 2️⃣ HEAVY WORK → BACKGROUND (non-blocking UX)
       unawaited(() async {
@@ -288,6 +363,7 @@ class _AddScoreScreenState extends State<AddScoreScreen>
       _showError('❌ Failed to load match or score data');
     }
   }
+
 
 
   /// Full pull‑to‑refresh (keeps logic intact)
@@ -1403,14 +1479,25 @@ class _AddScoreScreenState extends State<AddScoreScreen>
       );
 
       Perf.start('API_SUBMIT');
-      final success =
-      await MatchScoreService.submitScore(req, widget.token, context);
+
+      bool apiSuccess = false;
+
+      try {
+        apiSuccess = await MatchScoreService
+            .submitScore(req, widget.token, context)
+            .timeout(const Duration(seconds: 8));
+      } catch (e) {
+        debugPrint('⏱️ API timeout / error → $e');
+        apiSuccess = false;
+      }
+
       Perf.end('API_SUBMIT');
 
-      if (!success) {
-        _showError('❌ Failed to submit score.');
-        return;
+      if (!apiSuccess) {
+        debugPrint('🟡 API failed → adding ball to LOCAL QUEUE');
+        _addToQueue(req);       // 👈 offline / slow-net safe
       }
+
 
       // ---------------- LOCAL UI UPDATE (FAST) ----------------
       if (legalDelivery) {
@@ -1446,30 +1533,47 @@ class _AddScoreScreenState extends State<AddScoreScreen>
       if (mounted) setState(() => _isSubmitting = false);
     }
   }
+
+
+  void _addToQueue(MatchScoreRequest req) {
+    _pendingQueue.add(req);
+    debugPrint('📦 Queue size = ${_pendingQueue.length}');
+    _persistQueue(); // ✅ persist immediately
+  }
+  Future<void> _persistQueue() async {
+    final prefs = await SharedPreferences.getInstance();
+
+    final encoded = _pendingQueue
+        .map((r) => jsonEncode(r.toFormFields()))
+        .toList();
+
+    await prefs.setStringList(
+      'score_queue_${widget.matchId}',
+      encoded,
+    );
+  }
+  Future<void> _restoreQueue() async {
+    final prefs = await SharedPreferences.getInstance();
+
+    final list =
+        prefs.getStringList('score_queue_${widget.matchId}') ?? [];
+
+    if (list.isEmpty) return;
+
+    _pendingQueue.clear();
+
+    for (final raw in list) {
+      final map = jsonDecode(raw) as Map<String, dynamic>;
+      _pendingQueue.add(MatchScoreRequest.fromJson(map)
+      );
+    }
+
+    debugPrint('📦 Restored queue: ${_pendingQueue.length}');
+  }
+
+
   bool _bgFetching = false;
 
-  void _unawaitedRefreshScore() {
-    if (_bgFetching) return;
-    _bgFetching = true;
-
-    Future.microtask(() async {
-      try {
-        Perf.start('FETCH_SCORE_BG');
-        final refreshed = await _fetchCurrentScoreData();
-        Perf.end('FETCH_SCORE_BG');
-
-        if (!mounted || refreshed == null) return;
-
-        Perf.start('PARSE_BG');
-        _parseCurrentScore(refreshed, overridePlayers: false);
-        Perf.end('PARSE_BG');
-
-        setState(() {});
-      } finally {
-        _bgFetching = false;
-      }
-    });
-  }
 
   void _showMatchEndDialog(
       String message, {
