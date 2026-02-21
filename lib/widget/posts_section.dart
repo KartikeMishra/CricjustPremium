@@ -11,15 +11,29 @@ class PostsSection extends StatefulWidget {
   final VoidCallback onLoadMore;
   final void Function(bool hasData)? onDataLoaded;
 
-  const PostsSection({super.key, required this.onLoadMore, this.onDataLoaded});
+  const PostsSection({
+    super.key,
+    required this.onLoadMore,
+    this.onDataLoaded,
+  });
 
   @override
   State<PostsSection> createState() => _PostsSectionState();
 }
 
-class _PostsSectionState extends State<PostsSection> {
+class _PostsSectionState extends State<PostsSection>
+    with AutomaticKeepAliveClientMixin {
+  // ---------------- CACHE ----------------
+  static List<PostModel>? _cache;
+  static DateTime? _cacheTime;
+  static const Duration _ttl = Duration(seconds: 30);
+  // --------------------------------------
+
   List<PostModel> _posts = [];
   bool _isLoading = true;
+
+  @override
+  bool get wantKeepAlive => true;
 
   @override
   void initState() {
@@ -28,24 +42,51 @@ class _PostsSectionState extends State<PostsSection> {
   }
 
   Future<void> _fetchPosts() async {
-    try {
-      final posts = await PostService.fetchPosts(limit: 3);
-      if (!mounted) return;
-      setState(() {
-        _posts = posts;
-        _isLoading = false;
-      });
-      widget.onDataLoaded?.call(posts.isNotEmpty);
-    } catch (e) {
-      debugPrint("Error loading posts: $e");
-      if (!mounted) return;
-      setState(() => _isLoading = false);
-      widget.onDataLoaded?.call(false);
+    // ✅ Serve from cache if fresh
+    if (_cache != null &&
+        _cacheTime != null &&
+        DateTime.now().difference(_cacheTime!) < _ttl) {
+      _posts = _cache!;
+      _isLoading = false;
+      widget.onDataLoaded?.call(_posts.isNotEmpty);
+      if (mounted) setState(() {});
+      return;
     }
+
+    int retry = 0;
+
+    while (retry < 3) {
+      try {
+        final posts = await PostService
+            .fetchPosts(limit: 3)
+            .timeout(const Duration(seconds: 6));
+
+        _cache = posts;
+        _cacheTime = DateTime.now();
+
+        if (!mounted) return;
+        setState(() {
+          _posts = posts;
+          _isLoading = false;
+        });
+
+        widget.onDataLoaded?.call(posts.isNotEmpty);
+        return;
+      } catch (_) {
+        retry++;
+        await Future.delayed(const Duration(milliseconds: 400));
+      }
+    }
+
+    if (!mounted) return;
+    setState(() => _isLoading = false);
+    widget.onDataLoaded?.call(false);
   }
 
   @override
   Widget build(BuildContext context) {
+    super.build(context); // 🔑 keep-alive required
+
     final isDark = Theme.of(context).brightness == Brightness.dark;
     final baseColor = isDark ? Colors.grey[800]! : Colors.grey[300]!;
     final highlightColor = isDark ? Colors.grey[600]! : Colors.grey[100]!;
@@ -57,7 +98,7 @@ class _PostsSectionState extends State<PostsSection> {
           Column(
             children: List.generate(
               3,
-              (_) => _buildShimmerCard(baseColor, highlightColor),
+                  (_) => _buildShimmerCard(baseColor, highlightColor),
             ),
           )
         else if (_posts.isEmpty)
@@ -67,40 +108,38 @@ class _PostsSectionState extends State<PostsSection> {
           )
         else
           Column(
-            children: _posts
-                .map(
-                  (post) => Padding(
-                    padding: const EdgeInsets.symmetric(
-                      horizontal: 14,
-                      vertical: 10,
-                    ),
-                    child: ClipRRect(
-                      borderRadius: BorderRadius.circular(18),
-                      child: BackdropFilter(
-                        filter: ImageFilter.blur(sigmaX: 2, sigmaY: 2),
-                        child: Container(
-                          decoration: BoxDecoration(
-                            gradient: const LinearGradient(
-                              colors: [Color(0xFFF7FAFC), Colors.white],
-                              begin: Alignment.topLeft,
-                              end: Alignment.bottomRight,
-                            ),
-                            borderRadius: BorderRadius.circular(18),
-                            boxShadow: [
-                              BoxShadow(
-                                color: Colors.blue.withValues(alpha: 0.04),
-                                blurRadius: 8,
-                                offset: const Offset(0, 4),
-                              ),
-                            ],
-                          ),
-                          child: PostCard(post: post),
+            children: _posts.map((post) {
+              return Padding(
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 14,
+                  vertical: 10,
+                ),
+                child: ClipRRect(
+                  borderRadius: BorderRadius.circular(18),
+                  child: BackdropFilter(
+                    filter: ImageFilter.blur(sigmaX: 2, sigmaY: 2),
+                    child: Container(
+                      decoration: BoxDecoration(
+                        gradient: const LinearGradient(
+                          colors: [Color(0xFFF7FAFC), Colors.white],
+                          begin: Alignment.topLeft,
+                          end: Alignment.bottomRight,
                         ),
+                        borderRadius: BorderRadius.circular(18),
+                        boxShadow: [
+                          BoxShadow(
+                            color: Colors.blue.withValues(alpha: 0.04),
+                            blurRadius: 8,
+                            offset: const Offset(0, 4),
+                          ),
+                        ],
                       ),
+                      child: PostCard(post: post),
                     ),
                   ),
-                )
-                .toList(),
+                ),
+              );
+            }).toList(),
           ),
         const SizedBox(height: 16),
         Center(
@@ -111,7 +150,8 @@ class _PostsSectionState extends State<PostsSection> {
             style: ElevatedButton.styleFrom(
               foregroundColor: Colors.white,
               backgroundColor: AppColors.primary,
-              padding: const EdgeInsets.symmetric(horizontal: 28, vertical: 12),
+              padding:
+              const EdgeInsets.symmetric(horizontal: 28, vertical: 12),
               shape: RoundedRectangleBorder(
                 borderRadius: BorderRadius.circular(14),
               ),

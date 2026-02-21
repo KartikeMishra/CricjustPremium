@@ -35,6 +35,12 @@ class _HomePageContentState extends State<HomePageContent>
   bool _hasRecent = true;
   bool _hasPosts = true;
   bool _hasVideos = true; // videos visibility flag
+  bool _loadLive = true;
+  bool _loadTournament = false;
+  bool _loadVideos = false;
+  bool _loadUpcoming = false;
+  bool _loadRecent = false;
+  bool _loadPosts = false;
 
   @override
   void initState() {
@@ -43,6 +49,35 @@ class _HomePageContentState extends State<HomePageContent>
       duration: const Duration(milliseconds: 700),
       vsync: this,
     )..forward();
+
+    _loadSectionsGradually(); // ✅ ADD THIS
+  }
+
+  void _loadSectionsGradually() async {
+    await Future.delayed(const Duration(milliseconds: 200));
+    if (!mounted) return;
+
+    setState(() => _loadTournament = true);
+
+    await Future.delayed(const Duration(milliseconds: 200));
+    if (!mounted) return;
+
+    setState(() => _loadVideos = true);
+
+    await Future.delayed(const Duration(milliseconds: 200));
+    if (!mounted) return;
+
+    setState(() => _loadUpcoming = true);
+
+    await Future.delayed(const Duration(milliseconds: 200));
+    if (!mounted) return;
+
+    setState(() => _loadRecent = true);
+
+    await Future.delayed(const Duration(milliseconds: 200));
+    if (!mounted) return;
+
+    setState(() => _loadPosts = true);
   }
 
   void _onSectionDataLoaded(String section, bool hasData) {
@@ -125,10 +160,10 @@ class _HomePageContentState extends State<HomePageContent>
   @override
   Widget build(BuildContext context) {
     final sections = <Widget>[
-      if (_hasLive)
-        _buildSection(
-          'Live Matches',
-          Icons.live_tv,
+    if (_hasLive)
+    _buildSection(
+    'Live Matches',
+    Icons.live_tv,
           LiveMatchesSection(
             onDataLoaded: (hasData) => _onSectionDataLoaded('live', hasData),
           ),
@@ -146,7 +181,7 @@ class _HomePageContentState extends State<HomePageContent>
           accent: Colors.redAccent,
         ),
 
-      if (_hasTournament)
+      if (_hasTournament && _loadTournament)
         _buildSection(
           'Tournaments',
           Icons.emoji_events,
@@ -174,7 +209,7 @@ class _HomePageContentState extends State<HomePageContent>
         ),
 
       // Videos (exactly ~5 items)
-      if (_hasVideos)
+      if (_hasVideos && _loadVideos)
         _buildSection(
           'Videos',
           Icons.ondemand_video_rounded,
@@ -189,7 +224,7 @@ class _HomePageContentState extends State<HomePageContent>
           },
         ),
 
-      if (_hasUpcoming)
+      if (_hasUpcoming && _loadUpcoming)
         _buildSection(
           'Upcoming Matches',
           Icons.schedule_rounded,
@@ -209,7 +244,7 @@ class _HomePageContentState extends State<HomePageContent>
           },
         ),
 
-      if (_hasRecent)
+      if (_hasRecent && _loadRecent)
         _buildSection(
           'Recent Matches',
           Icons.history_rounded,
@@ -229,7 +264,7 @@ class _HomePageContentState extends State<HomePageContent>
           },
         ),
 
-      if (_hasPosts)
+      if (_hasPosts && _loadPosts)
         _buildSection(
           'News & Posts',
           Icons.article_rounded,

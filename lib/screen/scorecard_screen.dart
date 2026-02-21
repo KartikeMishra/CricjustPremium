@@ -6,6 +6,11 @@ import '../model/match_scorecard_model.dart';
 import '../service/match_detail_service.dart';
 import '../screen/player_info.dart';
 
+
+Map<int, List<PlayerScore>> _sortedPlayersCache = {};
+Map<int, List<BowlerStats>> _sortedBowlersCache = {};
+Map<int, List<YetToBat>> _sortedYetCache = {};
+
 class ScorecardScreen extends StatefulWidget {
   final int matchId;
   const ScorecardScreen({super.key, required this.matchId});
@@ -28,27 +33,56 @@ class _ScorecardScreenState extends State<ScorecardScreen> {
   }
 
   Future<void> _refreshScorecard() async {
+    _sortedPlayersCache.clear();
+    _sortedBowlersCache.clear();
+    _sortedYetCache.clear();
+
     setState(_loadScorecard);
   }
 
+
   // ---------- API order helpers (sort strictly by orderIndex) ----------
   List<PlayerScore> _apiOrderPlayers(TeamScore team) {
+    if (_sortedPlayersCache.containsKey(team.teamId)) {
+      return _sortedPlayersCache[team.teamId]!;
+    }
+
     final list = List<PlayerScore>.from(team.details.players);
-    list.sort((a, b) => (a.orderIndex ?? 1 << 20).compareTo(b.orderIndex ?? 1 << 20));
+    list.sort((a, b) =>
+        (a.orderIndex ?? 1 << 20).compareTo(b.orderIndex ?? 1 << 20));
+
+    _sortedPlayersCache[team.teamId] = list;
     return list;
   }
+
 
   List<YetToBat> _apiOrderYetToBat(TeamScore team) {
+    if (_sortedYetCache.containsKey(team.teamId)) {
+      return _sortedYetCache[team.teamId]!;
+    }
+
     final list = List<YetToBat>.from(team.details.yetToBat);
-    list.sort((a, b) => (a.orderIndex ?? 1 << 20).compareTo(b.orderIndex ?? 1 << 20));
+    list.sort((a, b) =>
+        (a.orderIndex ?? 1 << 20).compareTo(b.orderIndex ?? 1 << 20));
+
+    _sortedYetCache[team.teamId] = list;
     return list;
   }
 
+
   List<BowlerStats> _apiOrderBowlers(TeamScore team) {
+    if (_sortedBowlersCache.containsKey(team.teamId)) {
+      return _sortedBowlersCache[team.teamId]!;
+    }
+
     final list = List<BowlerStats>.from(team.details.bowlers);
-    list.sort((a, b) => (a.orderIndex ?? 1 << 20).compareTo(b.orderIndex ?? 1 << 20));
+    list.sort((a, b) =>
+        (a.orderIndex ?? 1 << 20).compareTo(b.orderIndex ?? 1 << 20));
+
+    _sortedBowlersCache[team.teamId] = list;
     return list;
   }
+
 
   @override
   Widget build(BuildContext context) {
@@ -283,10 +317,10 @@ class _ScorecardScreenState extends State<ScorecardScreen> {
     final gradient = isDark
         ? [const Color(0x332196F3), const Color(0x332197D2)]
         : [Colors.blue.shade100, Colors.blue.shade50];
-    final txtAccent = isDark ? Colors.lightBlue[200]! : const Color(0xFF1976D2);
+    final txtAccent =
+    isDark ? Colors.lightBlue[200]! : const Color(0xFF1976D2);
 
-    return AnimatedContainer(
-      duration: const Duration(milliseconds: 250),
+    return Container(
       padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
       decoration: BoxDecoration(
         gradient: LinearGradient(colors: gradient),
@@ -305,7 +339,10 @@ class _ScorecardScreenState extends State<ScorecardScreen> {
           ),
           Text(
             value,
-            style: TextStyle(fontWeight: FontWeight.w900, color: txtAccent),
+            style: TextStyle(
+              fontWeight: FontWeight.w900,
+              color: txtAccent,
+            ),
           ),
         ],
       ),
@@ -329,10 +366,9 @@ class _ScorecardScreenState extends State<ScorecardScreen> {
       ),
     );
   }
-
   Widget _yetToBatInner(TeamScore bat, bool isDark) {
     final nameColor = isDark ? Colors.white : Colors.blue[800];
-    final ytb = _apiOrderYetToBat(bat); // enforce API order
+    final ytb = _apiOrderYetToBat(bat);
 
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
@@ -350,22 +386,26 @@ class _ScorecardScreenState extends State<ScorecardScreen> {
           spacing: 8,
           runSpacing: 8,
           children: ytb.map((pt) {
-            return GestureDetector(
+            return InkWell(
               onTap: () => _navigateToPlayer(pt.playerId),
-              child: AnimatedContainer(
-                duration: const Duration(milliseconds: 180),
-                padding: const EdgeInsets.symmetric(vertical: 8, horizontal: 12),
+              borderRadius: BorderRadius.circular(20),
+              child: Container(
+                padding:
+                const EdgeInsets.symmetric(vertical: 8, horizontal: 12),
                 decoration: BoxDecoration(
-                  color: isDark ? Colors.white10 : Colors.blue.withOpacity(.08),
+                  color: isDark
+                      ? Colors.white10
+                      : Colors.blue.withOpacity(.08),
                   borderRadius: BorderRadius.circular(20),
-                  border: Border.all(color: isDark ? Colors.white10 : Colors.black12),
+                  border: Border.all(
+                    color: isDark ? Colors.white10 : Colors.black12,
+                  ),
                 ),
                 child: Text(
                   pt.name,
                   style: TextStyle(
                     fontWeight: FontWeight.w700,
                     color: nameColor,
-                    decoration: TextDecoration.none,
                   ),
                 ),
               ),
@@ -375,6 +415,7 @@ class _ScorecardScreenState extends State<ScorecardScreen> {
       ],
     );
   }
+
 
   // ---------------- Tables ----------------
 
@@ -444,7 +485,6 @@ class _ScorecardScreenState extends State<ScorecardScreen> {
       ],
     );
   }
-
   Widget _playerRow({
     required String name,
     String? info,
@@ -458,12 +498,10 @@ class _ScorecardScreenState extends State<ScorecardScreen> {
     final bg = isDark ? const Color(0x151FFFFFF) : Colors.white;
     final border = isDark ? Colors.white10 : Colors.black12;
 
-    final positiveColor = positive
-        ? (isDark ? Colors.greenAccent : Colors.green[700])
-        : null;
+    final positiveColor =
+    positive ? (isDark ? Colors.greenAccent : Colors.green[700]) : null;
 
-    return AnimatedContainer(
-      duration: const Duration(milliseconds: 180),
+    return Container(
       margin: const EdgeInsets.only(bottom: 8),
       padding: const EdgeInsets.symmetric(vertical: 10, horizontal: 12),
       decoration: BoxDecoration(
@@ -473,13 +511,13 @@ class _ScorecardScreenState extends State<ScorecardScreen> {
       ),
       child: Row(
         children: [
-          // name + dismissal
+          /// Name + dismissal
           Expanded(
             flex: flex.isNotEmpty ? flex[0] : 5,
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                GestureDetector(
+                InkWell( // slightly lighter than GestureDetector
                   onTap: onTap,
                   child: Row(
                     children: [
@@ -497,9 +535,10 @@ class _ScorecardScreenState extends State<ScorecardScreen> {
                           maxLines: 1,
                           overflow: TextOverflow.ellipsis,
                           style: TextStyle(
-                            color: isDark ? Colors.lightBlue[200] : Colors.blue[800],
+                            color: isDark
+                                ? Colors.lightBlue[200]
+                                : Colors.blue[800],
                             fontWeight: FontWeight.w800,
-                            decoration: TextDecoration.none,
                           ),
                         ),
                       ),
@@ -525,7 +564,7 @@ class _ScorecardScreenState extends State<ScorecardScreen> {
             ),
           ),
 
-          // metrics (right-aligned)
+          /// Metrics (right aligned)
           for (int i = 0; i < values.length; i++)
             Expanded(
               flex: (i + 1 < flex.length) ? flex[i + 1] : 1,
@@ -569,14 +608,14 @@ class _ScorecardScreenState extends State<ScorecardScreen> {
     required Widget child,
     required bool isDark,
   }) {
-    return AnimatedContainer(
-      duration: const Duration(milliseconds: 220),
-      curve: Curves.easeOut,
+    return Container(
       margin: const EdgeInsets.symmetric(vertical: 6),
       decoration: BoxDecoration(
         color: isDark ? const Color(0xFF1E222B) : Colors.white,
         borderRadius: BorderRadius.circular(16),
-        border: Border.all(color: isDark ? Colors.white10 : Colors.black12),
+        border: Border.all(
+          color: isDark ? Colors.white10 : Colors.black12,
+        ),
       ),
       child: Padding(
         padding: const EdgeInsets.all(14),

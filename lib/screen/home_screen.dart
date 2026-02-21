@@ -2,6 +2,7 @@
 // HomeScreen – premium & smooth: static backdrop on Home, IndexedStack to keep tabs alive,
 // modern gradient surfaces, soft shadows, and subtle animations — without heavy blur.
 
+import 'dart:async';
 import 'dart:convert';
 import 'package:another_flushbar/flushbar.dart';
 import 'package:cricjust_premium/screen/permission/receiver_qr_screen.dart';
@@ -234,7 +235,8 @@ class _HomeScreenState extends State<HomeScreen> {
       const AllPostsScreen(),
     ]);
 
-    _loadUserInfo();
+    _loadUserFromCache();              // ⚡ instant UI
+    unawaited(_refreshUserFromApi());  // 🔄 background
   }
 
   Color get _barStart => AppColors.primary;
@@ -280,9 +282,11 @@ class _HomeScreenState extends State<HomeScreen> {
 
     if (token.isNotEmpty) {
       try {
-        final resp = await http.get(Uri.parse(
-          'https://cricjust.in/wp-json/custom-api-for-cricket/user-info?api_logged_in_token=$token',
-        ));
+
+        final resp = await http
+            .get(Uri.parse('https://cricjust.in/wp-json/custom-api-for-cricket/user-info?api_logged_in_token=$token',
+        ))
+            .timeout(const Duration(seconds: 8));
         if (!mounted) return;
         if (resp.statusCode == 200) {
           final jsonData = json.decode(resp.body);
@@ -611,6 +615,62 @@ class _HomeScreenState extends State<HomeScreen> {
     }
     return pid;
   }
+  Future<void> _loadUserFromCache() async {
+    final prefs = await SharedPreferences.getInstance();
+    if (!mounted) return;
+
+    setState(() {
+      _apiToken = prefs.getString('api_logged_in_token');
+      _isLoggedIn = (_apiToken ?? '').isNotEmpty;
+      _userName = prefs.getString('userName') ?? '';
+      _userEmail = prefs.getString('userEmail') ?? '';
+      _profilePicUrl = prefs.getString('profilePic');
+      _isAdmin = _computeIsAdminFromPrefs(prefs);
+    });
+  }
+  Future<void> _refreshUserFromApi() async {
+    final prefs = await SharedPreferences.getInstance();
+    final token = prefs.getString('api_logged_in_token') ?? '';
+    if (token.isEmpty) return;
+
+    try {
+
+      final resp = await http
+          .get(Uri.parse('https://cricjust.in/wp-json/custom-api-for-cricket/user-info?api_logged_in_token=$token',
+      ))
+          .timeout(const Duration(seconds: 8));
+
+      if (!mounted || resp.statusCode != 200) return;
+
+      final jsonData = json.decode(resp.body);
+      if (jsonData['status'] != 1) return;
+
+      final data = jsonData['data'];
+      final extra = jsonData['extra_data'];
+
+      final name = (extra['first_name']?.toString().isNotEmpty ?? false)
+          ? extra['first_name'].toString()
+          : data['display_name']?.toString();
+
+      final email = data['user_email']?.toString();
+      final pic = extra['user_profile_image']?.toString();
+
+      await prefs.setString('userName', name ?? '');
+      await prefs.setString('userEmail', email ?? '');
+      if (pic != null) await prefs.setString('profilePic', pic);
+
+      if (!mounted) return;
+      setState(() {
+        _userName = name ?? _userName;
+        _userEmail = email ?? _userEmail;
+        _profilePicUrl = pic ?? _profilePicUrl;
+        _isLoggedIn = true;
+      });
+    } catch (_) {
+      // silent fail – UI already visible
+    }
+  }
+
 
   Widget _buildAuthButton() {
     final title = _isLoggedIn ? 'Logout' : 'Login';
@@ -1320,6 +1380,9 @@ class _StaticBackdrop extends CustomPainter {
     blob(secondary, w * 0.84, h * 0.30, maxDim * 0.42, isDark ? 0.18 : 0.14);
     blob(primary, w * 0.52, h * 0.82, maxDim * 0.38, isDark ? 0.18 : 0.14);
   }
+
+
+
 
   @override
   bool shouldRepaint(covariant _StaticBackdrop old) =>

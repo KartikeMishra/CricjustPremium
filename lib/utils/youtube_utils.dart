@@ -1,12 +1,20 @@
-// lib/utils/youtube_utils.dart
 class YoutubeUtils {
   /// Returns the 11-char YouTube video ID, or null if not found.
   static String? extractVideoId(String? url) {
     if (url == null || url.isEmpty) return null;
 
+    // ✅ NEW — iframe support
+    if (url.contains('<iframe')) {
+      final reg = RegExp('src\\s*=\\s*["\\\']([^"\\\']+)["\\\']', caseSensitive: false);
+      final m = reg.firstMatch(url);
+      if (m != null) {
+        url = m.group(1);
+      }
+    }
+
     Uri? u;
     try {
-      u = Uri.parse(url);
+      u = Uri.parse(url!);
     } catch (_) {
       return null;
     }
@@ -51,7 +59,6 @@ class YoutubeUtils {
 
   static bool _isValidId(String? id) {
     if (id == null) return false;
-    // Strip any trailing params just in case
     final clean = id.split('?').first.split('&').first;
     final reg = RegExp(r'^[a-zA-Z0-9_-]{11}$');
     return reg.hasMatch(clean);

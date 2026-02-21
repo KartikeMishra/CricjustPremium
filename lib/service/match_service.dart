@@ -286,25 +286,33 @@ class MatchService {
   /// If your Update screen expects single-match details, prefer the newer
   /// single-match endpoint below. This is kept for backward-compatibility.
   static Future<MatchModel> fetchMatchById(int matchId) async {
-    final url = Uri.parse('$_baseUrl/get-match-detail?match_id=$matchId');
+    final token = await _token();
+
+    final url = Uri.parse(
+      '$_baseUrl/get-match?match_id=$matchId&type=summary&api_logged_in_token=$token',
+    );
+
     final res = await _robustGet(url);
 
     if (res.statusCode != 200) {
       throw Exception('Failed to load match detail');
     }
+
     final body = jsonDecode(res.body);
-    if (body['status'] == 1 && body['data'] != null) {
-      return MatchModel.fromJson(body['data']);
+
+    if (body['status'] == 1 &&
+        body['data'] != null &&
+        body['raw_data'] != null) {
+
+      final data = body['data'][0];
+      final raw = body['raw_data'][0];
+
+      return MatchModel.fromJson(data, raw);
     } else {
-      final msg = (body['message'] ?? 'Match not found').toString();
-      if (_looksLikeSessionExpired(msg)) {
-        final prefs = await SharedPreferences.getInstance();
-        await prefs.clear();
-        throw Exception('Session expired. Please login again.');
-      }
-      throw Exception(msg);
+      throw Exception('Match not found');
     }
   }
+
 
   // -------------------------
   // Single match (newer detail)

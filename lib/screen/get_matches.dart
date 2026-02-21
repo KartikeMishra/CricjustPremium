@@ -321,15 +321,14 @@ class _GetMatchScreenState extends State<GetMatchScreen> {
     required VoidCallback? onTap,
     String? tooltip,
   }) {
-    return Tooltip(
-      message: tooltip ?? '',
-      child: Material(
-        color: Colors.transparent,
-        shape: const CircleBorder(),
-        child: InkWell(
-          customBorder: const CircleBorder(),
-          onTap: onTap,
-          child: Container(
+    return GestureDetector(
+      onTap: onTap,
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+
+          // 🔵 ORIGINAL ROUND BUTTON (UNCHANGED STYLE)
+          Container(
             margin: const EdgeInsets.only(right: 8),
             padding: const EdgeInsets.all(10),
             decoration: BoxDecoration(
@@ -339,7 +338,20 @@ class _GetMatchScreenState extends State<GetMatchScreen> {
             ),
             child: Icon(icon, color: color, size: 20),
           ),
-        ),
+
+          const SizedBox(height: 4),
+
+          // ✅ HEADING TEXT BELOW BUTTON
+          if (tooltip != null)
+            Text(
+              tooltip,
+              style: TextStyle(
+                fontSize: 10.5,
+                fontWeight: FontWeight.w500,
+                color: color,
+              ),
+            ),
+        ],
       ),
     );
   }
@@ -440,9 +452,23 @@ class _GetMatchScreenState extends State<GetMatchScreen> {
     }
 
     return Padding(
-      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-      child: Card(
-        elevation: isDark ? 1 : 4,
+        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+        child: InkWell(
+            borderRadius: BorderRadius.circular(16),
+            onTap: (!canScore || matchId == null || teamAId == null || teamBId == null)
+                ? null
+                : () {
+              _openTossOrScore(
+                matchId: matchId,
+                teamAId: teamAId,
+                teamBId: teamBId,
+                teamA: teamA,
+                teamB: teamB,
+                match: match,
+              );
+            },
+            child: Card(
+              elevation: isDark ? 1 : 4,
         color: isDark ? const Color(0xFF1E1E1E) : Colors.white,
         surfaceTintColor: isDark ? const Color(0xFF1E1E1E) : Colors.white,
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
@@ -660,7 +686,7 @@ class _GetMatchScreenState extends State<GetMatchScreen> {
                       _actionIcon(
                         icon: Icons.qr_code_2,
                         color: Colors.blueGrey,
-                        tooltip: 'Grant Access',
+                        tooltip: 'Share Scoring',
                         onTap: matchId == null
                             ? null
                             : () async {
@@ -725,6 +751,7 @@ class _GetMatchScreenState extends State<GetMatchScreen> {
           ),
         ),
       ),
+    ),
     );
   }
 
@@ -752,6 +779,69 @@ class _GetMatchScreenState extends State<GetMatchScreen> {
         ),
       ],
     );
+  }
+
+
+  Future<void> _openTossOrScore({
+    required int matchId,
+    required int teamAId,
+    required int teamBId,
+    required String teamA,
+    required String teamB,
+    required Map<String, dynamic> match,
+  }) async {
+
+    final tossWinner = match['toss_win'];
+    final tossDecision = match['toss_win_chooses'];
+
+    if (tossWinner != null && tossDecision != null) {
+      if (_isNavigatingToScoreScreen) return;
+
+      setState(() => _isNavigatingToScoreScreen = true);
+
+      await Navigator.push(
+        context,
+        MaterialPageRoute(
+          builder: (_) => AddScoreScreen(matchId: matchId, token: _token!),
+        ),
+      );
+
+      if (mounted) {
+        setState(() => _isNavigatingToScoreScreen = false);
+      }
+    } else {
+      final ok = await showDialog<bool>(
+        context: context,
+        builder: (_) => TossDialog(
+          matchId: matchId,
+          teamAId: teamAId,
+          teamBId: teamBId,
+          token: _token!,
+          teamAName: teamA,
+          teamBName: teamB,
+        ),
+      );
+
+      if (ok == true) {
+        await _loadMatches();
+
+        final refreshed = _matches.firstWhere(
+              (m) => _asInt(m['match_id']) == matchId,
+          orElse: () => match,
+        );
+
+        if (refreshed['toss_win'] != null &&
+            refreshed['toss_win_chooses'] != null) {
+          Navigator.push(
+            context,
+            MaterialPageRoute(
+              builder: (_) =>
+                  AddScoreScreen(matchId: matchId, token: _token!),
+            ),
+          );
+        }
+      }
+    }
   }
 
   // ---------- build ----------

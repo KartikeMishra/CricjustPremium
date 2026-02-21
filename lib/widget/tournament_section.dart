@@ -26,7 +26,14 @@ class TournamentSection extends StatefulWidget {
   State<TournamentSection> createState() => _TournamentSectionState();
 }
 
-class _TournamentSectionState extends State<TournamentSection> {
+class _TournamentSectionState extends State<TournamentSection>
+    with AutomaticKeepAliveClientMixin {
+  // ---------------- CACHE ----------------
+  static final Map<String, List<TournamentModel>> _cache = {};
+  static final Map<String, DateTime> _cacheTime = {};
+  static const Duration _ttl = Duration(seconds: 30);
+  // --------------------------------------
+
   static const double _kCardHeight = 160;
   static const double _kLogo = 56;
 
@@ -35,38 +42,64 @@ class _TournamentSectionState extends State<TournamentSection> {
   final PageController _pageController = PageController(viewportFraction: 0.94);
 
   @override
+  bool get wantKeepAlive => true;
+
+  @override
   void initState() {
     super.initState();
     _fetchTournaments();
-  }
-
-  Future<void> _fetchTournaments() async {
-    try {
-      // ✅ Use the correct public API
-      final list = await TournamentService.fetchPublicTournaments(
-        type: widget.type,
-        limit: widget.limit,
-      );
-
-      if (!mounted) return;
-      setState(() {
-        _tournaments = list;
-        _isLoading = false;
-      });
-
-      widget.onDataLoaded?.call(list.isNotEmpty);
-    } catch (e) {
-      debugPrint('Error loading tournaments: $e');
-      if (!mounted) return;
-      setState(() => _isLoading = false);
-      widget.onDataLoaded?.call(false);
-    }
   }
 
   @override
   void dispose() {
     _pageController.dispose();
     super.dispose();
+  }
+
+  // ---------------- FETCH (SAFE) ----------------
+  Future<void> _fetchTournaments() async {
+    final key = '${widget.type}_${widget.limit}';
+
+    // ✅ Serve from cache
+    if (_cache.containsKey(key) &&
+        _cacheTime.containsKey(key) &&
+        DateTime.now().difference(_cacheTime[key]!) < _ttl) {
+      _tournaments = _cache[key]!;
+      _isLoading = false;
+      widget.onDataLoaded?.call(_tournaments.isNotEmpty);
+      if (mounted) setState(() {});
+      return;
+    }
+
+    int retry = 0;
+
+    while (retry < 3) {
+      try {
+        final list = await TournamentService.fetchPublicTournaments(
+          type: widget.type,
+          limit: widget.limit,
+        ).timeout(const Duration(seconds: 6));
+
+        _cache[key] = list;
+        _cacheTime[key] = DateTime.now();
+
+        if (!mounted) return;
+        setState(() {
+          _tournaments = list;
+          _isLoading = false;
+        });
+
+        widget.onDataLoaded?.call(list.isNotEmpty);
+        return;
+      } catch (_) {
+        retry++;
+        await Future.delayed(const Duration(milliseconds: 400));
+      }
+    }
+
+    if (!mounted) return;
+    setState(() => _isLoading = false);
+    widget.onDataLoaded?.call(false);
   }
 
   Color get _badgeColor {
@@ -82,8 +115,11 @@ class _TournamentSectionState extends State<TournamentSection> {
     }
   }
 
+  // ---------------- BUILD ----------------
   @override
   Widget build(BuildContext context) {
+    super.build(context); // 🔑 keep-alive
+
     if (_isLoading) return _buildShimmerLoader();
     if (_tournaments.isEmpty) return const SizedBox.shrink();
 
@@ -105,7 +141,8 @@ class _TournamentSectionState extends State<TournamentSection> {
                 onTap: () => widget.onTournamentTap?.call(t.tournamentId),
                 child: AnimatedContainer(
                   duration: const Duration(milliseconds: 220),
-                  margin: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+                  margin:
+                  const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
                   decoration: BoxDecoration(
                     borderRadius: BorderRadius.circular(18),
                     color: isDark ? const Color(0xFF1E1E1E) : Colors.white,
@@ -130,7 +167,8 @@ class _TournamentSectionState extends State<TournamentSection> {
                     child: Stack(
                       children: [
                         BackdropFilter(
-                          filter: ImageFilter.blur(sigmaX: 1.2, sigmaY: 1.2),
+                          filter:
+                          ImageFilter.blur(sigmaX: 1.2, sigmaY: 1.2),
                           child: const SizedBox.expand(),
                         ),
                         Padding(
@@ -139,13 +177,17 @@ class _TournamentSectionState extends State<TournamentSection> {
                             children: [
                               ClipRRect(
                                 borderRadius: BorderRadius.circular(10),
-                                child: _LogoBox(url: t.tournamentLogo, size: _kLogo),
+                                child: _LogoBox(
+                                  url: t.tournamentLogo,
+                                  size: _kLogo,
+                                ),
                               ),
                               const SizedBox(width: 12),
                               Expanded(
                                 child: Column(
                                   mainAxisAlignment: MainAxisAlignment.center,
-                                  crossAxisAlignment: CrossAxisAlignment.start,
+                                  crossAxisAlignment:
+                                  CrossAxisAlignment.start,
                                   children: [
                                     Row(
                                       children: [
@@ -154,7 +196,8 @@ class _TournamentSectionState extends State<TournamentSection> {
                                             t.tournamentName,
                                             maxLines: 1,
                                             overflow: TextOverflow.ellipsis,
-                                            style: theme.textTheme.titleMedium?.copyWith(
+                                            style: theme.textTheme.titleMedium
+                                                ?.copyWith(
                                               fontWeight: FontWeight.w700,
                                               fontSize: 15.5,
                                               color: isDark
@@ -164,7 +207,10 @@ class _TournamentSectionState extends State<TournamentSection> {
                                           ),
                                         ),
                                         const SizedBox(width: 8),
-                                        _TypeBadge(color: _badgeColor, label: widget.type),
+                                        _TypeBadge(
+                                          color: _badgeColor,
+                                          label: widget.type,
+                                        ),
                                       ],
                                     ),
                                     const SizedBox(height: 4),
@@ -173,7 +219,8 @@ class _TournamentSectionState extends State<TournamentSection> {
                                         t.tournamentDesc,
                                         maxLines: 1,
                                         overflow: TextOverflow.ellipsis,
-                                        style: theme.textTheme.bodySmall?.copyWith(
+                                        style: theme.textTheme.bodySmall
+                                            ?.copyWith(
                                           fontSize: 12.5,
                                           color: isDark
                                               ? Colors.grey[400]
@@ -185,7 +232,8 @@ class _TournamentSectionState extends State<TournamentSection> {
                                       "Start: ${_formatDate(t.startDate)} • Teams: ${t.teams}",
                                       maxLines: 1,
                                       overflow: TextOverflow.ellipsis,
-                                      style: theme.textTheme.labelSmall?.copyWith(
+                                      style: theme.textTheme.labelSmall
+                                          ?.copyWith(
                                         color: isDark
                                             ? Colors.grey[500]
                                             : Colors.grey[600],
@@ -210,15 +258,13 @@ class _TournamentSectionState extends State<TournamentSection> {
         Center(
           child: SmoothPageIndicator(
             controller: _pageController,
-            count: _tournaments.isEmpty ? 1 : _tournaments.length,
+            count: _tournaments.length,
             effect: WormEffect(
               dotHeight: 7,
               dotWidth: 7,
               spacing: 7,
               activeDotColor: AppColors.primary,
-              dotColor: Theme.of(context).brightness == Brightness.dark
-                  ? Colors.grey
-                  : Colors.grey.shade400,
+              dotColor: isDark ? Colors.grey : Colors.grey.shade400,
             ),
           ),
         ),
@@ -237,7 +283,6 @@ class _TournamentSectionState extends State<TournamentSection> {
       child: ListView.builder(
         scrollDirection: Axis.horizontal,
         itemCount: 2,
-        physics: const BouncingScrollPhysics(),
         padding: const EdgeInsets.symmetric(horizontal: 16),
         itemBuilder: (context, index) {
           return Shimmer.fromColors(
@@ -268,11 +313,14 @@ class _TournamentSectionState extends State<TournamentSection> {
   }
 }
 
-// --- small helpers (UI only) ---
+// -----------------------------------------------------------------------------
+// UI HELPERS (MUST BE IN SAME FILE)
+// -----------------------------------------------------------------------------
 
 class _LogoBox extends StatelessWidget {
   final String url;
   final double size;
+
   const _LogoBox({required this.url, this.size = 56});
 
   @override
@@ -304,19 +352,15 @@ class _LogoBox extends StatelessWidget {
           height: size,
           alignment: Alignment.center,
           color: isDark ? const Color(0xFF2C2C2C) : Colors.grey.shade100,
-          child: SizedBox(
+          child: const SizedBox(
             width: 16,
             height: 16,
-            child: CircularProgressIndicator(
-              strokeWidth: 2,
-              valueColor: AlwaysStoppedAnimation(
-                Theme.of(context).colorScheme.primary.withOpacity(0.9),
-              ),
-            ),
+            child: CircularProgressIndicator(strokeWidth: 2),
           ),
         );
       },
-      errorBuilder: (_, __, ___) => Icon(Icons.broken_image, size: size),
+      errorBuilder: (_, __, ___) =>
+          Icon(Icons.broken_image, size: size),
     );
   }
 }
@@ -324,6 +368,7 @@ class _LogoBox extends StatelessWidget {
 class _TypeBadge extends StatelessWidget {
   final Color color;
   final String label;
+
   const _TypeBadge({required this.color, required this.label});
 
   @override

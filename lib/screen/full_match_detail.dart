@@ -2,17 +2,20 @@
 import 'dart:async';
 import 'dart:convert';
 import 'package:flutter/material.dart';
+import 'package:share_plus/share_plus.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:intl/intl.dart';
 import 'package:http/http.dart' as http;
 import 'package:url_launcher/url_launcher.dart';
 
+import '../LivePlayerStateYoutube.dart';
 import '../model/sponsor_model.dart';
 import '../service/match_detail_service.dart';
 import '../service/match_score_service.dart';
 import '../service/sponsor_service.dart';
 import '../theme/color.dart';
 import '../model/match_summary_model.dart';
+import '../utils/youtube_utils.dart';
 import '../widget/tv_score_banner.dart';
 import '../widget/youtube_box.dart';
 
@@ -100,6 +103,30 @@ class _FullMatchDetailState extends State<FullMatchDetail> {
       _token = prefs.getString('api_logged_in_token');
     });
     _loadYoutube(); // fetch youtube once token available
+  }
+
+  void _shareScore() {
+    final raw = summaryData?.rawMatchData ?? _fallbackMatchData;
+    if (raw == null) return;
+
+    final team1 = raw['team_1']?['team_name'] ?? 'Team A';
+    final team2 = raw['team_2']?['team_name'] ?? 'Team B';
+
+    String scoreText = '$team1 vs $team2';
+
+    if (_liveScore != null) {
+      final runs = _liveScore!['score']['total_runs'] ?? 0;
+      final wkts = _liveScore!['score']['total_wkts'] ?? 0;
+      final oversDone = _liveScore!['score']['overs_done'] ?? 0;
+      final ballsDone = _liveScore!['score']['balls_done'] ?? 0;
+
+      scoreText +=
+      '\nLive Score: $runs/$wkts ($oversDone.$ballsDone ov)';
+    }
+
+    scoreText += '\n\nFollow live on Cricjust App 🔥';
+
+    Share.share(scoreText);
   }
 
   Future<void> _loadSummaryData() async {
@@ -485,7 +512,7 @@ class _FullMatchDetailState extends State<FullMatchDetail> {
                           const Expanded(
                             child: Center(
                               child: Text(
-                                'Match Details',
+                                'Match Detail',
                                 style: TextStyle(
                                   color: Colors.white,
                                   fontWeight: FontWeight.w800,
@@ -494,21 +521,28 @@ class _FullMatchDetailState extends State<FullMatchDetail> {
                               ),
                             ),
                           ),
-                          SizedBox(
-                            width: kToolbarHeight,
-                            child: isLive
-                                ? const Center(
-                              child: Text(
-                                'LIVE',
-                                style: TextStyle(
-                                  color: Colors.white,
-                                  fontWeight: FontWeight.w900,
-                                  letterSpacing: 1,
+                          Row(
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              if (isLive)
+                                const Padding(
+                                  padding: EdgeInsets.only(right: 6),
+                                  child: Text(
+                                    'LIVE',
+                                    style: TextStyle(
+                                      color: Colors.white,
+                                      fontWeight: FontWeight.w900,
+                                      letterSpacing: 1,
+                                    ),
+                                  ),
                                 ),
+                              IconButton(
+                                icon: const Icon(Icons.share, color: Colors.white),
+                                onPressed: _shareScore,
                               ),
-                            )
-                                : null,
-                          ),
+                            ],
+                          )
+
                         ],
                       ),
                     ),
@@ -610,10 +644,14 @@ class _FullMatchDetailState extends State<FullMatchDetail> {
                           ),
 
                         // ----- YouTube panel -----
-                        if (headerPanel == _HeaderPanel.youtube && (youtubeUrl ?? '').isNotEmpty) ...[
+        /*
+        if (headerPanel == _HeaderPanel.youtube &&
+                            (youtubeUrl ?? '').isNotEmpty) ...[
                           const SizedBox(height: 12),
                           Card(
-                            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                            shape: RoundedRectangleBorder(
+                              borderRadius: BorderRadius.circular(12),
+                            ),
                             elevation: 1,
                             child: Padding(
                               padding: const EdgeInsets.fromLTRB(12, 12, 12, 12),
@@ -623,17 +661,24 @@ class _FullMatchDetailState extends State<FullMatchDetail> {
                                   const Padding(
                                     padding: EdgeInsets.only(bottom: 8),
                                     child: Text(
-                                      'Live Stream / Video',
+                                      'Live ',
                                       textAlign: TextAlign.center,
-                                      style: TextStyle(fontSize: 16, fontWeight: FontWeight.w800),
+                                      style: TextStyle(
+                                        fontSize: 16,
+                                        fontWeight: FontWeight.w800,
+                                      ),
                                     ),
                                   ),
-                                  YouTubeBox(youtubeUrl: youtubeUrl!),
+
+
+
+
                                 ],
                               ),
                             ),
                           ),
                         ],
+                       */
 
                         const SizedBox(height: 12),
                         _buildSponsorStripCard(), // centered title + carousel

@@ -93,6 +93,8 @@ void logBallSubmit(Map<String, String> fields) {
   debugPrint('📤 SUBMIT ${fields['over_number']}.${fields['ball_number']} → ${jsonEncode(payload)}');
 }
 
+final GlobalKey<ScaffoldMessengerState> _scaffoldMessengerKey =
+GlobalKey<ScaffoldMessengerState>();
 
 class AddScoreScreen extends StatefulWidget {
   final int matchId;
@@ -172,6 +174,7 @@ class _AddScoreScreenState extends State<AddScoreScreen>
   int onStrikeRuns    = 0;
   int nonStrikeRuns   = 0;
   String? _youtubeUrl;
+  bool _bowlerLovOpen = false;
 
 // Extras & run rate
   int totalExtras     = 0;
@@ -198,6 +201,7 @@ class _AddScoreScreenState extends State<AddScoreScreen>
   late List<Map<String, dynamic>> _team1Squad;
   late List<Map<String, dynamic>> _team2Squad;
   bool _isSecondInning = false;
+  bool _firstTimeGuideShown = false;
 
   OutBatsman? _lastOutBatsman; // who got out (only for run-out)
   int? _outPlayerId;           // optional: player ID to replace
@@ -347,9 +351,18 @@ class _AddScoreScreenState extends State<AddScoreScreen>
         if (!mounted) return;
 
         // fallback player selection
-        if (onStrikePlayerId == null ||
-            nonStrikePlayerId == null ||
-            bowlerId == null) {
+        if (!_firstTimeGuideShown &&
+            (onStrikePlayerId == null ||
+                nonStrikePlayerId == null ||
+                bowlerId == null)) {
+
+          _firstTimeGuideShown = true;
+
+          Future.delayed(const Duration(milliseconds: 600), () {
+            _showSelectionGuide();
+          });
+        }
+        {
           await Future.delayed(const Duration(milliseconds: 300));
           await _showSelectPlayerSheet(isBatsman: true, selectForStriker: true);
           await _showSelectPlayerSheet(isBatsman: true, selectForStriker: false);
@@ -365,6 +378,57 @@ class _AddScoreScreenState extends State<AddScoreScreen>
   }
 
 
+  void _showSelectionGuide() {
+    if (!mounted) return;
+
+    showDialog(
+      context: context,
+      builder: (_) => AlertDialog(
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(16),
+        ),
+        title: Row(
+          children: const [
+            Icon(Icons.sports_cricket, size: 20),
+            SizedBox(width: 8),
+            Text("Start Scoring"),
+          ],
+        ),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: const [
+
+            Row(
+              children: [
+                Text("1️⃣ "),
+                Expanded(child: Text("Tap batsman card to select Striker & Non-Striker")),
+              ],
+            ),
+
+            SizedBox(height: 10),
+
+            Row(
+              children: [
+                Text("2️⃣ "),
+                Expanded(child: Text("Tap bowler card to select Bowler")),
+              ],
+            ),
+
+            SizedBox(height: 14),
+            Text("Then start scoring.", style: TextStyle(color: Colors.grey)),
+          ],
+        ),
+
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context),
+            child: const Text("Got it"),
+          ),
+        ],
+      ),
+    );
+  }
 
   /// Full pull‑to‑refresh (keeps logic intact)
   Future<void> _hardRefresh() async {
@@ -385,13 +449,14 @@ class _AddScoreScreenState extends State<AddScoreScreen>
       // ignore
     }
   }
-
   /// 4.3 Reset and swap into 2nd innings
-  void _startSecondInning() {
+  /// 4.3 Reset and swap into 2nd innings
+
+  Future<void> _startSecondInning() async {
     if (_isSecondInning) return;
 
     setState(() {
-      _isSecondInning   = true;
+      _isSecondInning    = true;
       _firstInningClosed = true;
 
       // reset counters
@@ -412,14 +477,50 @@ class _AddScoreScreenState extends State<AddScoreScreen>
       // clear timeline / submitted keys
       timeline.clear();
       _submittedBalls.clear();
-
-      // swap squads
-      _battingSidePlayers = _team2Squad;
-      _bowlingSidePlayers = _team1Squad;
     });
 
-    debugPrint('🔄 Second innings local state reset & squads swapped.');
+    // 🔁 Reload squads (role + XI aware)
+    await _loadSquads();
+
+    // ---------- Recalculate teams ----------
+    final int battingTeamId = !_firstInningClosed
+        ? _firstInningTeamId!
+        : (_firstInningTeamId == _teamOneId ? _teamTwoId! : _teamOneId!);
+
+    final int bowlingTeamId =
+    battingTeamId == _teamOneId ? _teamTwoId! : _teamOneId!;
+
+    // ---------- Enforce Playing XI ONLY ----------
+    final Set<int> validBattingXI =
+    battingTeamId == _teamOneId
+        ? _teamOne11.toSet()
+        : _teamTwo11.toSet();
+
+    final Set<int> validBowlingXI =
+    bowlingTeamId == _teamOneId
+        ? _teamOne11.toSet()
+        : _teamTwo11.toSet();
+
+    // ✅ Fix batting list
+    _battingSidePlayers =
+        _battingSidePlayers.where((p) => validBattingXI.contains(p['id'])).toList();
+
+    // ✅ Fix bowling list
+    _bowlingSidePlayers =
+        _bowlingSidePlayers.where((p) => validBowlingXI.contains(p['id'])).toList();
+
+    // ✅ Clean bowler stats (VERY IMPORTANT)
+    _bowlerStatsMap.removeWhere((id, _) => !validBowlingXI.contains(id));
+    _bowlerOversMap.removeWhere((id, _) => !validBowlingXI.contains(id));
+
+    debugPrint(
+      '🔄 2nd innings started | '
+          'BattingTeam=$battingTeamId (${_battingSidePlayers.length}) | '
+          'BowlingTeam=$bowlingTeamId (${_bowlingSidePlayers.length})',
+    );
   }
+
+
 
   void _resetInningPlayers() {
     onStrikePlayerId = null;
@@ -1026,7 +1127,53 @@ class _AddScoreScreenState extends State<AddScoreScreen>
       _showError("Failed to load squads");
       debugPrint('❌ Error loading squads: $e\n$st');
     }
+
+    _enforcePlayingXI();
   }
+
+  void _enforcePlayingXI() {
+    if (_teamOneId == null ||
+        _teamTwoId == null ||
+        _firstInningTeamId == null) return;
+
+    // Decide batting & fielding teams
+    final int battingTeamId = !_firstInningClosed
+        ? _firstInningTeamId!
+        : (_firstInningTeamId == _teamOneId ? _teamTwoId! : _teamOneId!);
+
+    final int fieldingTeamId =
+    battingTeamId == _teamOneId ? _teamTwoId! : _teamOneId!;
+
+    // Playing XI sets
+    final Set<int> battingXI =
+    battingTeamId == _teamOneId
+        ? _teamOne11.toSet()
+        : _teamTwo11.toSet();
+
+    final Set<int> fieldingXI =
+    fieldingTeamId == _teamOneId
+        ? _teamOne11.toSet()
+        : _teamTwo11.toSet();
+
+    // ✅ Batting list = ONLY batting XI
+    _battingSidePlayers =
+        _battingSidePlayers.where((p) => battingXI.contains(p['id'])).toList();
+
+    // ✅ Bowling list = ONLY fielding XI
+    _bowlingSidePlayers =
+        _bowlingSidePlayers.where((p) => fieldingXI.contains(p['id'])).toList();
+
+    // ✅ CLEAN bowler stats (this was causing mix-up)
+    _bowlerStatsMap.removeWhere((id, _) => !fieldingXI.contains(id));
+    _bowlerOversMap.removeWhere((id, _) => !fieldingXI.contains(id));
+
+    debugPrint(
+      '🛡️ Playing XI enforced | '
+          'BattingXI=${battingXI.join(",")} | '
+          'BowlingXI=${fieldingXI.join(",")}',
+    );
+  }
+
 
 
 /*
@@ -1889,13 +2036,23 @@ class _AddScoreScreenState extends State<AddScoreScreen>
     );
   }
 */
-  void _showBowlerSelectionAfterOver() {
-    WidgetsBinding.instance.addPostFrameCallback((_) async {
-      try {
-        await _updateLastCompletedOverBowler(); // light
 
+
+
+  void _showBowlerSelectionAfterOver() {
+    if (_bowlerLovOpen) return; // 🛑 prevent reopen
+    _bowlerLovOpen = true;
+
+    Future.microtask(() async {
+      try {
+        await _updateLastCompletedOverBowler();
+        await _showSelectPlayerSheet(isBatsman: false);
       } catch (_) {}
-      _showSelectPlayerSheet(isBatsman: false);
+
+      // ✅ reset after close
+      _bowlerLovOpen = false;
+
+      if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(
           content: Text('Over completed. Please select a new bowler.'),
@@ -2070,10 +2227,21 @@ class _AddScoreScreenState extends State<AddScoreScreen>
 
 
   void _showError(String msg) {
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(content: Text(msg), backgroundColor: Colors.red),
+    _scaffoldMessengerKey.currentState?.hideCurrentSnackBar();
+
+    _scaffoldMessengerKey.currentState?.showSnackBar(
+      SnackBar(
+        content: Text(msg),
+        backgroundColor: Colors.red,
+        behavior: SnackBarBehavior.floating,
+        margin: const EdgeInsets.all(16),
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(12),
+        ),
+      ),
     );
   }
+
 
 
   String _formatOversDisplayFromDouble(double ob) {
@@ -2139,147 +2307,216 @@ class _AddScoreScreenState extends State<AddScoreScreen>
         child: Container(
           color: Theme.of(context).canvasColor,
           height: 460,
-          child: ListView.builder(
-            itemCount: available.length,
-            itemBuilder: (_, i) {
-              final p   = available[i];
-              final id  = p['id'] as int;
-              final name= (p['name'] ?? p['display_name'] ?? p['user_login'] ?? 'Unnamed').toString();
+          child: Column(
+            children: [
 
-              // ---------- Bowler picker ----------
-              if (!isBatsman) {
-                final ob = _bowlerOversMap[id] ?? 0.0;
-                final displayOvers = _formatOversDisplayFromDouble(ob);
-                final completed = _completedOversFromDouble(ob);
-                final hasQuota = _bowlerMaxOvers <= 0 ? true : completed < _bowlerMaxOvers;
-                final consecutiveBlocked = (_lastBowlerId != null && id == _lastBowlerId);
+              // ✅ HEADING ADDED (NO LOGIC CHANGE)
+              Container(
+                width: double.infinity,
+                padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+                decoration: BoxDecoration(
+                  color: Theme.of(context).brightness == Brightness.dark
+                      ? const Color(0xFF1E1E1E)
+                      : Colors.grey.shade100,
+                  borderRadius:
+                  const BorderRadius.vertical(top: Radius.circular(16)),
+                ),
+                child: Row(
+                  children: [
+                    Icon(
+                      isBatsman ? Icons.sports_cricket : Icons.sports_baseball,
+                      size: 18,
+                    ),
+                    const SizedBox(width: 8),
+                    Text(
+                      isBatsman ? "Select Batsman" : "Select Bowler",
+                      style: const TextStyle(
+                        fontSize: 16,
+                        fontWeight: FontWeight.bold,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
 
-                final stats = _bowlerStatsMap[id];
-                final maid  = (stats?['maiden'] as int?) ?? 0;
-                final runs  = (stats?['runs'] as int?) ?? 0;
-                final wkts  = (stats?['wickets'] as int?) ?? 0;
-                final econ  = (stats?['econ'] as double?) ?? 0.0;
+              // ✅ ORIGINAL LIST (UNCHANGED)
+              Expanded(
+                child: ListView.builder(
+                  itemCount: available.length,
+                  itemBuilder: (_, i) {
+                    final p = available[i];
+                    final id = p['id'] as int;
+                    final name =
+                    (p['name'] ??
+                        p['display_name'] ??
+                        p['user_login'] ??
+                        'Unnamed')
+                        .toString();
 
-                return ListTile(
-                  leading: CircleAvatar(child: Text(name.isNotEmpty ? name[0] : '?')),
-                  title: Text(name, maxLines: 1, overflow: TextOverflow.ellipsis),
-                  subtitle: Text(
-                    '$displayOvers / ${_bowlerMaxOvers > 0 ? "${_bowlerMaxOvers}.0" : "–"}  •  M:$maid  R:$runs  W:$wkts  Econs:${econ.toStringAsFixed(2)}',
-                    maxLines: 2,
-                    overflow: TextOverflow.ellipsis,
-                  ),
-                  enabled: !consecutiveBlocked && hasQuota,
-                  onTap: () {
-                    if (!hasQuota) {
-                      _showError('Bowler has reached the maximum overs.');
-                      return;
+                    // ---------- Bowler picker ----------
+                    if (!isBatsman) {
+                      final ob = _bowlerOversMap[id] ?? 0.0;
+                      final displayOvers = _formatOversDisplayFromDouble(ob);
+                      final completed = _completedOversFromDouble(ob);
+                      final hasQuota =
+                      _bowlerMaxOvers <= 0 ? true : completed < _bowlerMaxOvers;
+                      final consecutiveBlocked =
+                      (_lastBowlerId != null && id == _lastBowlerId);
+
+                      final stats = _bowlerStatsMap[id];
+                      final maid = (stats?['maiden'] as int?) ?? 0;
+                      final runs = (stats?['runs'] as int?) ?? 0;
+                      final wkts = (stats?['wickets'] as int?) ?? 0;
+                      final econ = (stats?['econ'] as double?) ?? 0.0;
+
+                      return ListTile(
+                        leading: CircleAvatar(
+                            child: Text(name.isNotEmpty ? name[0] : '?')),
+                        title: Text(name,
+                            maxLines: 1, overflow: TextOverflow.ellipsis),
+                        subtitle: Text(
+                          '$displayOvers / ${_bowlerMaxOvers > 0 ? "${_bowlerMaxOvers}.0" : "–"}  •  M:$maid  R:$runs  W:$wkts  Econs:${econ.toStringAsFixed(2)}',
+                          maxLines: 2,
+                          overflow: TextOverflow.ellipsis,
+                        ),
+                        enabled: !consecutiveBlocked && hasQuota,
+                        onTap: () {
+                          if (!hasQuota) {
+                            _showError('Bowler has reached the maximum overs.');
+                            return;
+                          }
+                          if (consecutiveBlocked) {
+                            _showError(
+                                'Same bowler cannot bowl consecutive overs.');
+                            return;
+                          }
+
+                          bowlerId = id;
+                          bowlerName = name;
+
+                          if (stats != null) {
+                            bowlerRunsConceded = runs;
+                            bowlerWickets = wkts;
+                            bowlerMaidens = maid;
+                            bowlerOversBowled =
+                                (stats['overs']?.toString()) ?? displayOvers;
+                            bowlerEconomy = econ;
+                          } else {
+                            bowlerRunsConceded = 0;
+                            bowlerWickets = 0;
+                            bowlerMaidens = 0;
+                            bowlerOversBowled = displayOvers;
+                            bowlerEconomy = 0.0;
+                          }
+
+                          setState(() {});
+                          Navigator.pop(context, id);
+                        },
+                      );
                     }
-                    if (consecutiveBlocked) {
-                      _showError('Same bowler cannot bowl consecutive overs.');
-                      return;
-                    }
 
-                    bowlerId = id;
-                    bowlerName = name;
+                    // ---------- Batsman picker ----------
+                    final stats =
+                        (p['stats'] as Map<String, dynamic>?) ?? const {};
+                    final r = _parseInt(stats['r']);
+                    final b = _parseInt(stats['b']);
+                    final fours = _parseInt(stats['4s']);
+                    final sixes = _parseInt(stats['6s']);
+                    final sr = double.tryParse('${stats['sr'] ?? 0}') ?? 0.0;
+                    final outBy = (stats['out_by'] ?? '').toString();
+                    final apiOut = (p['is_out'] ?? 0) == 1;
 
-                    if (stats != null) {
-                      bowlerRunsConceded = runs;
-                      bowlerWickets      = wkts;
-                      bowlerMaidens      = maid;
-                      bowlerOversBowled  = (stats['overs']?.toString()) ?? displayOvers;
-                      bowlerEconomy      = econ;
-                    } else {
-                      bowlerRunsConceded = 0;
-                      bowlerWickets      = 0;
-                      bowlerMaidens      = 0;
-                      bowlerOversBowled  = displayOvers;
-                      bowlerEconomy      = 0.0;
-                    }
+                    final alreadyUsed = _usedBatsmen.contains(id);
+                    final alreadyDismissed =
+                        _dismissedBatters.contains(id) || apiOut;
 
-                    setState(() {});
-                    Navigator.pop(context, id);
-                  },
-                );
-              }
+                    final bits = <String>[
+                      '$r (${b}b)',
+                      '4s:$fours',
+                      '6s:$sixes',
+                      'SR:${sr.toStringAsFixed(0)}',
+                      if (outBy.isNotEmpty && outBy != '0') 'out: $outBy',
+                    ];
 
-              // ---------- Batsman picker ----------
-              final stats = (p['stats'] as Map<String, dynamic>?) ?? const {};
-              final r     = _parseInt(stats['r']);
-              final b     = _parseInt(stats['b']);
-              final fours = _parseInt(stats['4s']);
-              final sixes = _parseInt(stats['6s']);
-              final sr    = double.tryParse('${stats['sr'] ?? 0}') ?? 0.0;
-              final outBy = (stats['out_by'] ?? '').toString();
-              final apiOut = (p['is_out'] ?? 0) == 1;
+                    return ListTile(
+                      leading: CircleAvatar(
+                          child: Text(name.isNotEmpty ? name[0] : '?')),
+                      title: Text(name,
+                          maxLines: 1, overflow: TextOverflow.ellipsis),
+                      subtitle: Text(bits.join(' • '),
+                          maxLines: 2, overflow: TextOverflow.ellipsis),
+                      trailing: alreadyDismissed
+                          ? const Chip(
+                          label: Text('OUT'),
+                          visualDensity: VisualDensity.compact)
+                          : (alreadyUsed
+                          ? const Chip(
+                          label: Text('USED'),
+                          visualDensity: VisualDensity.compact)
+                          : null),
+                      enabled: !alreadyDismissed,
+                      onTap: !alreadyDismissed
+                          ? () {
+                        if (selectForStriker == true &&
+                            id == nonStrikePlayerId) {
+                          _showError(
+                              'This player is already the non-striker.');
+                          return;
+                        }
+                        if (selectForStriker == false &&
+                            id == onStrikePlayerId) {
+                          _showError('This player is already the striker.');
+                          return;
+                        }
 
-              final alreadyUsed   = _usedBatsmen.contains(id);
-              final alreadyDismissed = _dismissedBatters.contains(id) || apiOut;
+                        if (selectForStriker == true) {
+                          onStrikePlayerId = id;
+                          onStrikeName = name;
+                          onStrikeRuns = 0;
+                          onStrikeBalls = 0;
+                          _assignBattingOrderIfMissing(id);
+                        } else if (selectForStriker == false) {
+                          nonStrikePlayerId = id;
+                          nonStrikeName = name;
+                          nonStrikeRuns = 0;
+                          nonStrikeBalls = 0;
+                          _assignBattingOrderIfMissing(id);
+                        } else {
+                          if (onStrikePlayerId == null) {
+                            onStrikePlayerId = id;
+                            onStrikeName = name;
+                            onStrikeRuns = 0;
+                            onStrikeBalls = 0;
+                            _assignBattingOrderIfMissing(id);
+                          } else {
+                            if (id == onStrikePlayerId) {
+                              _showError(
+                                  'This player is already the striker.');
+                              return;
+                            }
+                            nonStrikePlayerId = id;
+                            nonStrikeName = name;
+                            nonStrikeRuns = 0;
+                            nonStrikeBalls = 0;
+                            _assignBattingOrderIfMissing(id);
+                          }
+                        }
 
-              // Details line
-              final bits = <String>[
-                '$r (${b}b)',
-                '4s:$fours',
-                '6s:$sixes',
-                'SR:${sr.toStringAsFixed(0)}',
-                if (outBy.isNotEmpty && outBy != '0') 'out: $outBy',
-              ];
-
-              return ListTile(
-                leading: CircleAvatar(child: Text(name.isNotEmpty ? name[0] : '?')),
-                title: Text(name, maxLines: 1, overflow: TextOverflow.ellipsis),
-                subtitle: Text(bits.join(' • '), maxLines: 2, overflow: TextOverflow.ellipsis),
-                trailing: alreadyDismissed
-                    ? const Chip(label: Text('OUT'), visualDensity: VisualDensity.compact)
-                    : (alreadyUsed ? const Chip(label: Text('USED'), visualDensity: VisualDensity.compact) : null),
-                enabled: !alreadyDismissed, // 🔒 do not allow OUT again
-                onTap: !alreadyDismissed ? () {
-                  if (selectForStriker == true && id == nonStrikePlayerId) {
-                    _showError('This player is already the non-striker.');
-                    return;
-                  }
-                  if (selectForStriker == false && id == onStrikePlayerId) {
-                    _showError('This player is already the striker.');
-                    return;
-                  }
-
-                  if (selectForStriker == true) {
-                    onStrikePlayerId = id;
-                    onStrikeName     = name;
-                    onStrikeRuns     = 0;
-                    onStrikeBalls    = 0;
-                    _assignBattingOrderIfMissing(id);
-                  } else if (selectForStriker == false) {
-                    nonStrikePlayerId = id;
-                    nonStrikeName     = name;
-                    nonStrikeRuns     = 0;
-                    nonStrikeBalls    = 0;
-                    _assignBattingOrderIfMissing(id);
-                  } else {
-                    if (onStrikePlayerId == null) {
-                      onStrikePlayerId = id; onStrikeName = name;
-                      onStrikeRuns = 0; onStrikeBalls = 0;
-                      _assignBattingOrderIfMissing(id);
-                    } else {
-                      if (id == onStrikePlayerId) {
-                        _showError('This player is already the striker.');
-                        return;
+                        setState(() {});
+                        Navigator.pop(context, id);
                       }
-                      nonStrikePlayerId = id; nonStrikeName = name;
-                      nonStrikeRuns = 0; nonStrikeBalls = 0;
-                      _assignBattingOrderIfMissing(id);
-                    }
-                  }
-
-                  setState(() {});
-                  Navigator.pop(context, id);
-                } : null,
-              );
-            },
+                          : null,
+                    );
+                  },
+                ),
+              ),
+            ],
           ),
         ),
       ),
     );
   }
+
 
 
   Future<void> _updateLastCompletedOverBowler() async {
@@ -2505,6 +2742,8 @@ class _AddScoreScreenState extends State<AddScoreScreen>
     final theme = Theme.of(context);
     final isDark = theme.brightness == Brightness.dark;
 
+
+
     return Container(
       decoration: isDark
           ? null
@@ -2515,7 +2754,9 @@ class _AddScoreScreenState extends State<AddScoreScreen>
           end: Alignment.bottomRight,
         ),
       ),
-      child: Scaffold(
+        child: ScaffoldMessenger(
+          key: _scaffoldMessengerKey,
+          child: Scaffold(
         backgroundColor: Colors.transparent,
         appBar: PreferredSize(
           preferredSize: const Size.fromHeight(60),
@@ -2710,6 +2951,7 @@ class _AddScoreScreenState extends State<AddScoreScreen>
           ),
         ),
       ),
+    ),
     );
   }
 }

@@ -1,3 +1,7 @@
+import 'package:flutter/cupertino.dart';
+
+import '../widget/youtube_id.dart';
+
 class MatchModel {
   final int matchId;
   final String matchName;
@@ -25,6 +29,9 @@ class MatchModel {
   final int team2Overs;
   final int team2Balls;
 
+  final String youtubeIframe;
+  final String? youtubeVideoId;
+
   MatchModel({
     required this.matchId,
     required this.matchName,
@@ -49,11 +56,25 @@ class MatchModel {
     required this.team2Wickets,
     required this.team2Overs,
     required this.team2Balls,
+    required this.youtubeIframe,
+    required this.youtubeVideoId,
   });
 
-  factory MatchModel.fromJson(Map<String, dynamic> json) {
+  factory MatchModel.fromJson(
+      Map<String, dynamic> json, [
+        Map<String, dynamic>? rawData,
+      ]) {
     final team1 = json['team_1'] ?? {};
     final team2 = json['team_2'] ?? {};
+
+    // 🔥 API returns WATCH URL now
+    final youtubeUrl = (rawData?['youtube'] ?? '').toString();
+
+    // ✅ FINAL FIX — universal parser
+    final videoId = YoutubeId.tryParse(youtubeUrl);
+    debugPrint("🔥 RAW YOUTUBE URL = $youtubeUrl");
+    debugPrint("🔥 PARSED VIDEO ID = $videoId");
+
 
     return MatchModel(
       matchId: json['match_id'] ?? 0,
@@ -79,6 +100,9 @@ class MatchModel {
       team2Wickets: team2['total_wickets'] ?? 0,
       team2Overs: team2['overs_done'] ?? 0,
       team2Balls: team2['balls_done'] ?? 0,
+
+      youtubeIframe: youtubeUrl,
+      youtubeVideoId: videoId,
     );
   }
 }

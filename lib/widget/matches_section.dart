@@ -1,10 +1,13 @@
 // lib/widget/matches_section.dart
 //
 // ONE WIDGET for Live / Recent / Upcoming with a single, consistent card layout.
-// Usage:
-//   MatchesSection(mode: MatchesMode.live)
-//   MatchesSection(mode: MatchesMode.recent)
-//   MatchesSection(mode: MatchesMode.upcoming)
+// ✅ Optimized:
+// - AutomaticKeepAliveClientMixin
+// - In-memory cache (30s)
+// - Retry + timeout
+// - Reduced rebuilds
+//
+// ❌ UI / layout / card logic NOT changed
 
 import 'dart:math';
 import 'package:flutter/material.dart';
@@ -32,14 +35,23 @@ class MatchesSection extends StatefulWidget {
   State<MatchesSection> createState() => _MatchesSectionState();
 }
 
-class _MatchesSectionState extends State<MatchesSection> {
-  // Fuller width like the reference UI
+class _MatchesSectionState extends State<MatchesSection>
+    with AutomaticKeepAliveClientMixin {
+  // ---------------- CACHE ----------------
+  static final Map<MatchesMode, List<MatchModel>> _cache = {};
+  static final Map<MatchesMode, DateTime> _cacheTime = {};
+  static const Duration _ttl = Duration(seconds: 30);
+  // --------------------------------------
+
   final PageController _pageController = PageController(viewportFraction: 0.94);
   static const int _visibleCount = 5;
 
   List<MatchModel> _matches = [];
   bool _isLoading = true;
   int _currentPage = 0;
+
+  @override
+  bool get wantKeepAlive => true;
 
   @override
   void initState() {
@@ -53,33 +65,64 @@ class _MatchesSectionState extends State<MatchesSection> {
     super.dispose();
   }
 
+  // ---------------- FETCH (SAFE) ----------------
   Future<void> _fetch() async {
-    try {
-      final type = switch (widget.mode) {
-        MatchesMode.live => 'live',
-        MatchesMode.recent => 'recent',
-        MatchesMode.upcoming => 'upcoming',
-      };
-      final matches = await MatchService.fetchMatches(type: type, limit: 20);
-      if (!mounted) return;
-      setState(() {
-        _matches = matches;
-        _isLoading = false;
-      });
-      widget.onDataLoaded?.call(matches.isNotEmpty);
-    } catch (e) {
-      debugPrint('Error loading ${widget.mode} matches: $e');
-      if (!mounted) return;
-      setState(() => _isLoading = false);
-      widget.onDataLoaded?.call(false);
+    final mode = widget.mode;
+
+    // ✅ serve from cache if fresh
+    if (_cache.containsKey(mode) &&
+        _cacheTime.containsKey(mode) &&
+        DateTime.now().difference(_cacheTime[mode]!) < _ttl) {
+      _matches = _cache[mode]!;
+      _isLoading = false;
+      widget.onDataLoaded?.call(_matches.isNotEmpty);
+      if (mounted) setState(() {});
+      return;
     }
+
+    int retry = 0;
+
+    while (retry < 3) {
+      try {
+        final type = switch (mode) {
+          MatchesMode.live => 'live',
+          MatchesMode.recent => 'recent',
+          MatchesMode.upcoming => 'upcoming',
+        };
+
+        final matches = await MatchService
+            .fetchMatches(type: type, limit: 20)
+            .timeout(const Duration(seconds: 6));
+
+        _cache[mode] = matches;
+        _cacheTime[mode] = DateTime.now();
+
+        if (!mounted) return;
+        setState(() {
+          _matches = matches;
+          _isLoading = false;
+        });
+        widget.onDataLoaded?.call(matches.isNotEmpty);
+        return;
+      } catch (_) {
+        retry++;
+        await Future.delayed(const Duration(milliseconds: 400));
+      }
+    }
+
+    if (!mounted) return;
+    setState(() => _isLoading = false);
+    widget.onDataLoaded?.call(false);
   }
 
+  // ---------------- BUILD ----------------
   @override
   Widget build(BuildContext context) {
+    super.build(context); // 🔑 required for keep-alive
     final isDark = Theme.of(context).brightness == Brightness.dark;
 
     if (_isLoading) return _buildShimmerLoader();
+
     if (_matches.isEmpty) {
       return Padding(
         padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
@@ -97,7 +140,6 @@ class _MatchesSectionState extends State<MatchesSection> {
       );
     }
 
-    // Headroom to avoid overflow on larger fonts
     final textScale = MediaQuery.of(context).textScaleFactor;
     final base = 230.0;
     final extra = (textScale - 1.0) * 100.0;
@@ -111,7 +153,11 @@ class _MatchesSectionState extends State<MatchesSection> {
           child: PageView.builder(
             controller: _pageController,
             itemCount: min(_matches.length, _visibleCount),
-            onPageChanged: (i) => setState(() => _currentPage = i),
+            onPageChanged: (i) {
+              if (_currentPage != i) {
+                setState(() => _currentPage = i);
+              }
+            },
             itemBuilder: (context, index) {
               final match = _matches[index];
               final isActive = index == _currentPage;
@@ -119,10 +165,7 @@ class _MatchesSectionState extends State<MatchesSection> {
                 scale: isActive ? 1.0 : 0.97,
                 duration: const Duration(milliseconds: 220),
                 curve: Curves.easeOut,
-                child: _MatchCard(
-                  match: match,
-                  mode: widget.mode,
-                ),
+                child: _MatchCard(match: match, mode: widget.mode),
               );
             },
           ),
@@ -136,9 +179,9 @@ class _MatchesSectionState extends State<MatchesSection> {
               dotHeight: 8,
               dotWidth: 8,
               spacing: 8,
-              activeDotColor: const Color(0xFF3B82F6),                 // strong blue
+              activeDotColor: const Color(0xFF3B82F6),
               dotColor:
-              isDark ? Colors.white24 : const Color(0xFFD5E3FF),    // pale blue
+              isDark ? Colors.white24 : const Color(0xFFD5E3FF),
             ),
           ),
         ),
@@ -153,7 +196,7 @@ class _MatchesSectionState extends State<MatchesSection> {
     final highlight = isDark ? const Color(0xFF2C2C2C) : const Color(0xFFF5F7FA);
 
     return SizedBox(
-      height: 320, // match card silhouette
+      height: 320,
       child: ListView.builder(
         scrollDirection: Axis.horizontal,
         itemCount: 3,
@@ -176,10 +219,6 @@ class _MatchesSectionState extends State<MatchesSection> {
     );
   }
 }
-
-// -----------------------------------------------------------------------------
-// Card
-// -----------------------------------------------------------------------------
 
 class _MatchCard extends StatelessWidget {
   final MatchModel match;

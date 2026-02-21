@@ -22,6 +22,7 @@ class _LoginScreenState extends State<LoginScreen> {
   bool _obscurePassword = true;
   bool _rememberMe = false;
   bool _isLoading = false;
+  String? _inlinePasswordError;
 
   @override
   void initState() {
@@ -71,9 +72,14 @@ class _LoginScreenState extends State<LoginScreen> {
       final status = jsonData['status'];
       final ok = (status == 1 || status == '1');
       if (!ok) {
-        _showError(jsonData['message']?.toString() ?? 'Login failed');
+        setState(() {
+          _inlinePasswordError =
+              jsonData['message']?.toString() ?? 'Invalid phone or password';
+        });
+        _passwordCtrl.clear();
         return;
       }
+
 
       final token = (jsonData['api_logged_in_token'] ?? '').toString();
       final data = (jsonData['data'] ?? {}) as Map<String, dynamic>;
@@ -244,12 +250,39 @@ class _LoginScreenState extends State<LoginScreen> {
                       const SizedBox(height: 16),
 
                       // Password
+                  // Password
+                      // Password
                       TextFormField(
                         controller: _passwordCtrl,
                         obscureText: _obscurePassword,
                         decoration: _buildInputDecoration("Password", Icons.lock),
                         validator: (val) => val == null || val.isEmpty ? 'Enter password' : null,
+                        onChanged: (_) {
+                          if (_inlinePasswordError != null) {
+                            setState(() => _inlinePasswordError = null);
+                          }
+                        },
                       ),
+
+                      if (_inlinePasswordError != null)
+                        Padding(
+                          padding: const EdgeInsets.only(left: 8, top: 6),
+                          child: Align(
+                            alignment: Alignment.centerLeft,
+                            child: Text(
+                              _inlinePasswordError!,
+                              style: const TextStyle(
+                                color: Colors.red,
+                                fontSize: 13,
+                                fontWeight: FontWeight.w500,
+                              ),
+                            ),
+                          ),
+                        ),
+
+                      const SizedBox(height: 12),
+
+
                       const SizedBox(height: 12),
 
                       Row(

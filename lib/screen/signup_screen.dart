@@ -36,6 +36,10 @@ class _SignupScreenState extends State<SignupScreen> {
   double _passwordStrength = 0;
   String _passwordStrengthLabel = '';
   Color _passwordStrengthColor = Colors.red;
+// Inline field errors (NEW)
+  String? _emailError;
+  String? _phoneError;
+  String? _passwordInlineError;
 
   // ===== Terms & Privacy =====
   bool _agreed = false;
@@ -363,12 +367,23 @@ class _SignupScreenState extends State<SignupScreen> {
           setState(() {
             _errorMessage = 'You are already registered. Please login instead.';
           });
-        } else {
-          setState(() {
-            _errorMessage = data['message'] ?? 'Signup failed';
-          });
-        }
-      }
+        }  else {
+    final msg = (data['message'] ?? '').toString().toLowerCase();
+
+    setState(() {
+    if (msg.contains('email')) {
+    _emailError = 'Email already registered';
+    } else if (msg.contains('phone')) {
+    _phoneError = 'Phone number already registered';
+    } else if (msg.contains('password')) {
+    _passwordInlineError = 'Password not acceptable';
+    } else {
+    _errorMessage = data['message'] ?? 'Signup failed';
+    }
+    });
+    }
+
+  }
     } catch (e) {
       setState(() => _errorMessage = 'Could not signup. Please try again.');
     } finally {
@@ -462,21 +477,38 @@ class _SignupScreenState extends State<SignupScreen> {
                 const SizedBox(height: 12),
                 TextFormField(
                   controller: _emailCtrl,
-                  decoration: _decoration('Email'),
+                  decoration: _decoration('Email').copyWith(
+                    errorText: _emailError,
+                  ),
                   keyboardType: TextInputType.emailAddress,
-                  validator: (v) => v == null || !RegExp(r"^[\w-\.]+@([\w-]+\.)+[\w]{2,4}$").hasMatch(v)
+                  onChanged: (_) {
+                    if (_emailError != null) {
+                      setState(() => _emailError = null);
+                    }
+                  },
+                  validator: (v) =>
+                  v == null || !RegExp(r"^[\w-\.]+@([\w-]+\.)+[\w]{2,4}$").hasMatch(v)
                       ? 'Enter valid email'
                       : null,
                 ),
+
                 const SizedBox(height: 12),
                 TextFormField(
                   controller: _phoneCtrl,
-                  decoration: _decoration('Phone Number'),
+                  decoration: _decoration('Phone Number').copyWith(
+                    errorText: _phoneError,
+                  ),
                   keyboardType: TextInputType.number,
                   maxLength: 10,
                   inputFormatters: [FilteringTextInputFormatter.digitsOnly],
+                  onChanged: (_) {
+                    if (_phoneError != null) {
+                      setState(() => _phoneError = null);
+                    }
+                  },
                   validator: (v) => v == null || v.length != 10 ? 'Enter 10 digit number' : null,
                 ),
+
                 const SizedBox(height: 12),
                 TextFormField(
                   controller: _dobCtrl,
@@ -558,8 +590,14 @@ class _SignupScreenState extends State<SignupScreen> {
                 TextFormField(
                   controller: _passwordCtrl,
                   obscureText: _obscurePassword,
-                  onChanged: _checkPasswordStrength,
+                  onChanged: (val) {
+                    _checkPasswordStrength(val);
+                    if (_passwordInlineError != null) {
+                      setState(() => _passwordInlineError = null);
+                    }
+                  },
                   decoration: _decoration('Password').copyWith(
+                    errorText: _passwordInlineError,
                     suffixIcon: IconButton(
                       icon: Icon(_obscurePassword ? Icons.visibility_off : Icons.visibility),
                       onPressed: () => setState(() => _obscurePassword = !_obscurePassword),
@@ -567,6 +605,7 @@ class _SignupScreenState extends State<SignupScreen> {
                   ),
                   validator: (v) => v == null || v.length < 6 ? 'Min 6 characters' : null,
                 ),
+
                 const SizedBox(height: 8),
                 LinearProgressIndicator(
                   value: _passwordStrength,

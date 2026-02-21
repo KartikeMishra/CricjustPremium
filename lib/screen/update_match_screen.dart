@@ -1096,6 +1096,12 @@ class _UpdateMatchScreenState extends State<UpdateMatchScreen> {
     bool isTeamA,
   ) {
     if (players.isEmpty) return const SizedBox();
+
+    // Remove duplicate players just in case
+    final uniquePlayers = {
+      for (var p in players) int.parse(p['ID'].toString()): p
+    };
+
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
@@ -1104,10 +1110,13 @@ class _UpdateMatchScreenState extends State<UpdateMatchScreen> {
           style: TextStyle(color: txt, fontWeight: FontWeight.bold),
         ),
         const SizedBox(height: 8),
+
+        // ---------------- PLAYERS ----------------
         Wrap(
           spacing: 8,
-          children: players.map((p) {
+          children: uniquePlayers.values.map((p) {
             final id = int.parse(p['ID'].toString());
+
             return FilterChip(
               label: Text(
                 p['display_name'],
@@ -1120,59 +1129,110 @@ class _UpdateMatchScreenState extends State<UpdateMatchScreen> {
               backgroundColor: isDark ? Colors.white10 : Colors.grey[100],
               onSelected: (sel) {
                 setState(() {
-                  if (sel && selectedIds.length < 20) selectedIds.add(id);
-                  if (!sel) selectedIds.remove(id);
+                  if (sel && selectedIds.length < 20) {
+                    if (!selectedIds.contains(id)) {
+                      selectedIds.add(id);
+                    }
+                  } else {
+                    selectedIds.remove(id);
+
+                    // 🔥 auto clear captain/wk if removed
+                    if (isTeamA && _teamACaptainId == id) {
+                      _teamACaptainId = null;
+                    }
+                    if (isTeamA && _teamAWicketKeeperId == id) {
+                      _teamAWicketKeeperId = null;
+                    }
+                    if (!isTeamA && _teamBCaptainId == id) {
+                      _teamBCaptainId = null;
+                    }
+                    if (!isTeamA && _teamBWicketKeeperId == id) {
+                      _teamBWicketKeeperId = null;
+                    }
+                  }
                 });
               },
             );
           }).toList(),
         ),
+
         const SizedBox(height: 12),
-        DropdownButtonFormField<int>(
-          value: isTeamA ? _teamACaptainId : _teamBCaptainId,
-          decoration: _dropdownDecoration(isDark, 'Select Captain'),
-          items: selectedIds.map((id) {
-            final p = players.firstWhere(
-              (x) => x['ID'].toString() == id.toString(),
+
+        // ---------------- CAPTAIN ----------------
+        Builder(
+          builder: (_) {
+            final captainValue =
+            isTeamA ? _teamACaptainId : _teamBCaptainId;
+
+            return DropdownButtonFormField<int>(
+              value: selectedIds.contains(captainValue)
+                  ? captainValue
+                  : null,
+              decoration:
+              _dropdownDecoration(isDark, 'Select Captain'),
+              items: selectedIds.map((id) {
+                final p = uniquePlayers[id];
+                if (p == null) return null;
+                return DropdownMenuItem<int>(
+                  value: id,
+                  child: Text(
+                    p['display_name'],
+                    style: TextStyle(color: txt),
+                  ),
+                );
+              }).whereType<DropdownMenuItem<int>>().toList(),
+              onChanged: (v) => setState(() {
+                if (isTeamA) {
+                  _teamACaptainId = v;
+                } else {
+                  _teamBCaptainId = v;
+                }
+              }),
             );
-            return DropdownMenuItem<int>(
-              value: id,
-              child: Text(p['display_name'], style: TextStyle(color: txt)),
-            );
-          }).toList(),
-          onChanged: (v) => setState(() {
-            if (isTeamA) {
-              _teamACaptainId = v;
-            } else {
-              _teamBCaptainId = v;
-            }
-          }),
+          },
         ),
+
         const SizedBox(height: 8),
-        DropdownButtonFormField<int>(
-          value: isTeamA ? _teamAWicketKeeperId : _teamBWicketKeeperId,
-          decoration: _dropdownDecoration(isDark, 'Select Wicket-Keeper'),
-          items: selectedIds.map((id) {
-            final p = players.firstWhere(
-              (x) => x['ID'].toString() == id.toString(),
+
+        // ---------------- WICKET KEEPER ----------------
+        Builder(
+          builder: (_) {
+            final keeperValue =
+            isTeamA ? _teamAWicketKeeperId : _teamBWicketKeeperId;
+
+            return DropdownButtonFormField<int>(
+              value: selectedIds.contains(keeperValue)
+                  ? keeperValue
+                  : null,
+              decoration: _dropdownDecoration(
+                  isDark, 'Select Wicket-Keeper'),
+              items: selectedIds.map((id) {
+                final p = uniquePlayers[id];
+                if (p == null) return null;
+                return DropdownMenuItem<int>(
+                  value: id,
+                  child: Text(
+                    p['display_name'],
+                    style: TextStyle(color: txt),
+                  ),
+                );
+              }).whereType<DropdownMenuItem<int>>().toList(),
+              onChanged: (v) => setState(() {
+                if (isTeamA) {
+                  _teamAWicketKeeperId = v;
+                } else {
+                  _teamBWicketKeeperId = v;
+                }
+              }),
             );
-            return DropdownMenuItem<int>(
-              value: id,
-              child: Text(p['display_name'], style: TextStyle(color: txt)),
-            );
-          }).toList(),
-          onChanged: (v) => setState(() {
-            if (isTeamA) {
-              _teamAWicketKeeperId = v;
-            } else {
-              _teamBWicketKeeperId = v;
-            }
-          }),
+          },
         ),
+
         const SizedBox(height: 20),
       ],
     );
   }
+
 
   Widget _actionButton(String text, IconData icon, VoidCallback? onTap) {
     return GestureDetector(
