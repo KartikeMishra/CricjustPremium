@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:url_launcher/url_launcher.dart';
 import '../model/match_model.dart';
 import '../service/match_service.dart';
 import '../widget/youtube_box.dart';
@@ -85,14 +86,21 @@ class _MatchDetailScreenState extends State<MatchDetailScreen> {
         if (match!.youtubeVideoId != null &&
             match!.youtubeVideoId!.isNotEmpty) ...[
           const SizedBox(height: 14),
+
           const Text(
-            "Live Stream ",
+            "Live Stream 🏏",
             style: TextStyle(
               fontSize: 16,
               fontWeight: FontWeight.w700,
             ),
           ),
-          const SizedBox(height: 8),
+
+          const SizedBox(height: 10),
+
+          /// 🎥 ADD THIS LINE (MAIN FIX)
+          YoutubeBox(
+            videoId: match!.youtubeVideoId!,
+          ),
         ],
 
         const SizedBox(height: 20),

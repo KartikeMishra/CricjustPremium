@@ -8,16 +8,15 @@ import 'package:intl/intl.dart';
 import 'package:http/http.dart' as http;
 import 'package:url_launcher/url_launcher.dart';
 
-import '../LivePlayerStateYoutube.dart';
+// ✅ सिर्फ यह एक रखो
+import 'package:youtube_player_iframe/youtube_player_iframe.dart';
 import '../model/sponsor_model.dart';
 import '../service/match_detail_service.dart';
 import '../service/match_score_service.dart';
 import '../service/sponsor_service.dart';
 import '../theme/color.dart';
 import '../model/match_summary_model.dart';
-import '../utils/youtube_utils.dart';
 import '../widget/tv_score_banner.dart';
-import '../widget/youtube_box.dart';
 
 import 'match_summary_tab.dart';
 import 'scorecard_screen.dart';
@@ -274,6 +273,14 @@ class _FullMatchDetailState extends State<FullMatchDetail> {
             json['data'] is List &&
             (json['data'] as List).isNotEmpty) {
           final first = (json['data'] as List).first as Map<String, dynamic>;
+
+          // ✅ सभी keys print करो — देखो कौन सी field में URL है
+          debugPrint('🔥 ALL KEYS = ${first.keys.toList()}');
+          debugPrint('🔥 youtube field = ${first['youtube']}');
+          debugPrint('🔥 youtube_link = ${first['youtube_link']}');
+          debugPrint('🔥 live_url = ${first['live_url']}');
+          debugPrint('🔥 stream_url = ${first['stream_url']}');
+
           final url = _normalizeYoutube(first['youtube']);
           if (mounted) setState(() => _youtubeUrl = (url != null && url.isNotEmpty) ? url : null);
         }
@@ -308,7 +315,30 @@ class _FullMatchDetailState extends State<FullMatchDetail> {
         s == 'result' ||
         s == '2';
   }
+  String _extractVideoId(String url) {
+    try {
+      Uri uri = Uri.parse(url);
 
+      // live URL
+      if (uri.pathSegments.contains('live')) {
+        return uri.pathSegments.last;
+      }
+
+      // watch URL
+      if (uri.queryParameters.containsKey('v')) {
+        return uri.queryParameters['v'] ?? '';
+      }
+
+      // short URL (youtu.be)
+      if (uri.host.contains('youtu.be')) {
+        return uri.pathSegments.isNotEmpty ? uri.pathSegments.first : '';
+      }
+
+      return '';
+    } catch (e) {
+      return '';
+    }
+  }
   bool _isYoutubeUrl(String? u) {
     if (u == null) return false;
     final t = u.trim().toLowerCase();
@@ -381,6 +411,14 @@ class _FullMatchDetailState extends State<FullMatchDetail> {
     return 0;
   }
 
+  Future<void> _openYoutube(String videoId) async {
+    final url = Uri.parse("https://www.youtube.com/watch?v=$videoId");
+
+    await launchUrl(
+      url,
+      mode: LaunchMode.externalApplication,
+    );
+  }
   bool _hasAnySummary(dynamic s) {
     if (s == null) return false;
     if (s is String) return s.trim().isNotEmpty;
@@ -426,8 +464,9 @@ class _FullMatchDetailState extends State<FullMatchDetail> {
     final String? youtubeUrlPublic = _normalizeYoutube(raw['youtube']);
     final String? youtubeUrl = _youtubeUrl ?? youtubeUrlPublic;
     final bool hasYoutube = _isYoutubeUrl(youtubeUrl);
-    final _HeaderPanel headerPanel =
-    hasYoutube ? _HeaderPanel.youtube : (_liveScore != null ? _HeaderPanel.tv : _HeaderPanel.none);
+    final _HeaderPanel headerPanel = hasYoutube
+        ? _HeaderPanel.youtube
+        : (_liveScore != null ? _HeaderPanel.tv : _HeaderPanel.none);    hasYoutube ? _HeaderPanel.youtube : (_liveScore != null ? _HeaderPanel.tv : _HeaderPanel.none);
 
     final bool showSummary = _showSummaryTab && summaryData != null;
 
@@ -644,41 +683,155 @@ class _FullMatchDetailState extends State<FullMatchDetail> {
                           ),
 
                         // ----- YouTube panel -----
-        /*
-        if (headerPanel == _HeaderPanel.youtube &&
-                            (youtubeUrl ?? '').isNotEmpty) ...[
+                        if (headerPanel == _HeaderPanel.youtube)...
+
+                        [
                           const SizedBox(height: 12),
+
                           Card(
                             shape: RoundedRectangleBorder(
                               borderRadius: BorderRadius.circular(12),
                             ),
                             elevation: 1,
                             child: Padding(
-                              padding: const EdgeInsets.fromLTRB(12, 12, 12, 12),
+                              padding: const EdgeInsets.all(12),
                               child: Column(
                                 crossAxisAlignment: CrossAxisAlignment.stretch,
                                 children: [
-                                  const Padding(
-                                    padding: EdgeInsets.only(bottom: 8),
-                                    child: Text(
-                                      'Live ',
-                                      textAlign: TextAlign.center,
-                                      style: TextStyle(
-                                        fontSize: 16,
-                                        fontWeight: FontWeight.w800,
-                                      ),
+                                  const Text(
+                                    'Live 🏏',
+                                    textAlign: TextAlign.center,
+                                    style: TextStyle(
+                                      fontSize: 16,
+                                      fontWeight: FontWeight.w800,
                                     ),
                                   ),
 
+                                  const SizedBox(height: 10),
 
+                                  /// ✅ SAFE VIDEO HANDLING
 
+// ✅ YouTube Builder section replace करो
+                                  Builder(
+                                    builder: (context) {
+                                      final videoId = YoutubePlayerController.convertUrlToId(
+                                        youtubeUrl ?? '',
+                                      );
 
+                                      if (videoId == null || videoId.isEmpty) {
+                                        return const SizedBox();
+                                      }
+
+                                      final controller = YoutubePlayerController.fromVideoId(
+                                        videoId: videoId,
+                                        params: const YoutubePlayerParams(
+                                          showControls: true,
+                                          showFullscreenButton: true,
+                                          mute: false,
+                                        ),
+                                      );
+
+                                      return YoutubePlayerScaffold(
+                                        controller: controller,
+                                        builder: (context, player) {
+                                          return ClipRRect(
+                                            borderRadius: BorderRadius.circular(12),
+                                            child: player,
+                                          );
+                                        },
+                                      );
+                                    },
+                                  ),
+
+                        /*          Builder(
+                                    builder: (context) {
+                                      final videoId = YoutubePlayer.convertUrlToId(youtubeUrl ?? '')
+                                          ?? _extractVideoId(youtubeUrl ?? '');
+
+                                      if (videoId.isEmpty) {
+                                        return const SizedBox();
+                                      }
+
+                                      final controller = YoutubePlayerController(
+                                        initialVideoId: videoId,
+                                        flags: const YoutubePlayerFlags(
+                                          autoPlay: false,
+                                          mute: false,
+                                          showLiveFullscreenButton: true,
+                                        ),
+                                      );
+
+                                      return YoutubePlayer(
+                                        controller: controller,
+                                        showVideoProgressIndicator: true,
+                                        progressIndicatorColor: Colors.red,
+                                        onReady: () => debugPrint('YouTube Player Ready'),
+                                      );
+                                    },
+                                  ),
+*/
+
+                              /*
+                                  Builder(
+                                    builder: (context) {
+                                      final videoId = _extractVideoId(youtubeUrl ?? '');
+
+                                      if (videoId.isEmpty) {
+                                        return const SizedBox(); // hide if no video
+                                      }
+
+                                      return GestureDetector(
+                                        onTap: () {
+                                          _openYoutube(videoId);
+                                        },
+                                        child: ClipRRect(
+                                          borderRadius: BorderRadius.circular(12),
+                                          child: Stack(
+                                            alignment: Alignment.center,
+                                            children: [
+                                              /// 🎬 Thumbnail (dynamic)
+                                              Image.network(
+                                                "https://img.youtube.com/vi/$videoId/0.jpg",
+                                                height: 200,
+                                                width: double.infinity,
+                                                fit: BoxFit.cover,
+                                              ),
+
+                                              /// ▶️ Play Button
+                                              const Icon(
+                                                Icons.play_circle_fill,
+                                                size: 70,
+                                                color: Colors.white,
+                                              ),
+
+                                              /// 🔴 LIVE badge (optional)
+                                              Positioned(
+                                                top: 10,
+                                                left: 10,
+                                                child: Container(
+                                                  padding: const EdgeInsets.symmetric(
+                                                      horizontal: 8, vertical: 4),
+                                                  decoration: BoxDecoration(
+                                                    color: Colors.red,
+                                                    borderRadius: BorderRadius.circular(6),
+                                                  ),
+                                                  child: const Text(
+                                                    "LIVE",
+                                                    style: TextStyle(color: Colors.white, fontSize: 12),
+                                                  ),
+                                                ),
+                                              ),
+                                            ],
+                                          ),
+                                        ),
+                                      );
+                                    },
+                                  ),*/
                                 ],
                               ),
                             ),
                           ),
                         ],
-                       */
 
                         const SizedBox(height: 12),
                         _buildSponsorStripCard(), // centered title + carousel

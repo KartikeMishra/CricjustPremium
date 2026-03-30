@@ -1,54 +1,35 @@
 import 'package:flutter/material.dart';
 import 'package:youtube_player_iframe/youtube_player_iframe.dart';
 
-class YouTubeBox extends StatefulWidget {
-  final String youtubeUrl;
+class YoutubeBox extends StatefulWidget {
+  final String videoId;
 
-  const YouTubeBox({
-    super.key,
-    required this.youtubeUrl,
-  });
+  const YoutubeBox({super.key, required this.videoId});
 
   @override
-  State<YouTubeBox> createState() => _YouTubeBoxState();
+  State<YoutubeBox> createState() => _YoutubeBoxState();
 }
 
-class _YouTubeBoxState extends State<YouTubeBox> {
+class _YoutubeBoxState extends State<YoutubeBox> {
   late YoutubePlayerController _controller;
-  String? _videoId;
 
   @override
   void initState() {
     super.initState();
 
-    /// ⭐ Convert ANY youtube format → videoId
-    _videoId =
-        YoutubePlayerController.convertUrlToId(widget.youtubeUrl) ??
-            _extractIdFromIframe(widget.youtubeUrl) ??
-            widget.youtubeUrl;
-
-    /// ⭐ Stable controller (LIVE safe)
     _controller = YoutubePlayerController(
       params: const YoutubePlayerParams(
         showControls: true,
         showFullscreenButton: true,
-        strictRelatedVideos: true,
-        enableJavaScript: true,
-        playsInline: true,
       ),
     );
 
-    /// ⭐ LIVE streams ke liye BEST method
-    if (_videoId != null && _videoId!.isNotEmpty) {
-      _controller.cueVideoById(videoId: _videoId!);
-    }
-  }
+    _controller.loadVideoById(videoId: widget.videoId);
 
-  /// iframe support
-  String? _extractIdFromIframe(String text) {
-    final reg = RegExp(r'embed\/([a-zA-Z0-9_-]+)');
-    final match = reg.firstMatch(text);
-    return match?.group(1);
+    /// ✅ NEW METHOD
+    Future.delayed(const Duration(milliseconds: 300), () {
+      _controller.playVideo();
+    });
   }
 
   @override
@@ -59,18 +40,17 @@ class _YouTubeBoxState extends State<YouTubeBox> {
 
   @override
   Widget build(BuildContext context) {
-    if (_videoId == null || _videoId!.isEmpty) {
-      return const SizedBox.shrink();
-    }
-
-    return ClipRRect(
-      borderRadius: BorderRadius.circular(12),
-      child: AspectRatio(
-        aspectRatio: 16 / 9,
-        child: YoutubePlayer(
-          controller: _controller,
-        ),
-      ),
+    return YoutubePlayerScaffold(
+      controller: _controller,
+      builder: (context, player) {
+        return ClipRRect(
+          borderRadius: BorderRadius.circular(12),
+          child: AspectRatio(
+            aspectRatio: 16 / 9,
+            child: player,
+          ),
+        );
+      },
     );
   }
 }

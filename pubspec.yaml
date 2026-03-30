@@ -37,14 +37,20 @@ dependencies:
   share_plus: ^11.1.0
   fl_chart: ^0.63.0
 
+
+# ✅ यह पहले से है — काफी है
   image_cropper:
   audioplayers: ^6.5.0
   confetti: ^0.8.0
   crypto: ^3.0.3
   youtube_player_iframe: ^5.2.2
+  webview_flutter: ^4.0.7
   qr_flutter: ^4.1.0
   mobile_scanner: ^7.0.1
   material_symbols_icons: ^4.2719.0
+# pubspec.yaml:
+  youtube_player_flutter: ^8.1.2
+  flutter_inappwebview: ^5.8.0        # ✅ explicitly add this
 
   # Storage
   hive: ^2.2.3
